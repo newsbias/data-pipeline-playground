@@ -1,0 +1,23 @@
+[[source]]
+
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+
+[packages]
+
+nltk = "*"
+scikit-learn = "*"
+numpy = "*"
+scipy = "*"
+sumpy = {git = "https://github.com/newsbias/sumpy.git", ref = "e03a5a4"}
+
+
+[dev-packages]
+
+
+
+[requires]
+
+python_version = "3.6"
