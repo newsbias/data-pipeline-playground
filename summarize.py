@@ -4,16 +4,18 @@ import sumpy
 
 def summarize_clusters_lexrank(clusters):
     summaries = []
-    for cluster in clusters:
-        articles = [a for a, sim in cluster["articles"] if sim > .55]
-        art_texts = [a["text_content"].replace(u"\u201D", u"\"").replace(
-            u"\u201C", u"\"") for a in articles]
+    for i, cluster in enumerate(clusters):
+        # articles = [a for a, sim in cluster["articles"] if sim > .55]
+        texts = [a["text_content"] for a in cluster["articles"]]
 
-        summary = sumpy.lexrank(art_texts)
+        summary = sumpy.lexrank(texts)
         sents = []
 
+        print("summary ", i, ":\n", summary)
+        print()
+    '''
         for x, row in summary._df.head(5).iterrows():
-            s = {"article_id": articles[row["doc id"]]["_id"],
+            s = {"article_id": cluster["articles"][row["doc id"]]["_id"],
                  "sentence_id": row["sent id"],
                  "text": row["sent text"]}
             sents.append(s)
@@ -22,5 +24,6 @@ def summarize_clusters_lexrank(clusters):
                        "summary_type": "lexrank"}
 
         summaries.append(summary_map)
+    '''
 
     return summaries

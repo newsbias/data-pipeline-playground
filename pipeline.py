@@ -26,7 +26,7 @@ def main():
          similar_titles = []
          for seen_title in seen_titles:
              if fuzz.ratio(title, seen_title) > 80:
-                 print(title, seen_title, fuzz.ratio(title, seen_title))
+                 # print(title, seen_title, fuzz.ratio(title, seen_title))
                  similar_titles.append(title)
          if len(similar_titles):
              pass
@@ -34,17 +34,21 @@ def main():
              seen_titles.append(title)
              article = {
                   "_id": i,
-                  "title": x['title'],
-                  "text_content": x['text'],
+                  "title": title,
+                  "text_content": x['text'].strip(),
              }
              articles.append(article)
-             i += 1
-    print(len(articles))
+         i += 1
+    # print(len(articles))
 
     clusters = cluster.cluster_articles(articles)
-    summaries = summarize.summarize_clusters_lexrank(clusters)
-    print(json.dumps(summaries))
 
+    import pdb
+    pdb.set_trace()
+    summaries = summarize.summarize_clusters_lexrank(clusters)
+    # print(json.dumps(summaries))
+
+    '''
     output_obj = []
     for summary in summaries:
         sentences = summary["sentences"]
@@ -56,6 +60,7 @@ def main():
             output_obj.append({"title": title, "summary": text})
 
     print(json.dumps(output_obj))
+    '''
 
 if __name__ == '__main__':
     main()
