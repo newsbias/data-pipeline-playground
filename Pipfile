@@ -20,7 +20,6 @@ fuzzywuzzy = "*"
 cchardet = "*"
 python-levenshtein = "*"
 
-
 [dev-packages]
 
 
