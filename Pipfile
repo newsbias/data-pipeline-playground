@@ -12,6 +12,13 @@ scikit-learn = "*"
 numpy = "*"
 scipy = "*"
 sumpy = {git = "https://github.com/newsbias/sumpy.git", ref = "e03a5a4"}
+aiohttp = "*"
+aiodns = "*"
+lxml = "*"
+readability-lxml = "*"
+fuzzywuzzy = "*"
+cchardet = "*"
+python-levenshtein = "*"
 
 
 [dev-packages]
