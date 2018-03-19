@@ -123,4 +123,4 @@ app.on_startup.append(init)
 app.on_cleanup.append(close)
 
 app.router.add_get('/search', handler)
-web.run_app(app)
+web.run_app(app, port=int(os.environ.get('PORT', '8080')))
