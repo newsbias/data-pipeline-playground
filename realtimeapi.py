@@ -4,7 +4,6 @@ import os
 import sys
 import json
 from aiohttp import web
-from concurrent.futures import ProcessPoolExecutor
 import text_extract
 import news_parsers
 from fuzzywuzzy import fuzz
@@ -30,12 +29,10 @@ def json_response(obj):
 
 async def init(app):
     app['session'] = aiohttp.ClientSession()
-    app['pool'] = ProcessPoolExecutor()
 
 
 async def close(app):
     await app['session'].close()
-    app['pool'].shutdown()
 
 
 async def newsapi_query(session, api_key, q):
@@ -57,7 +54,7 @@ async def newsapi_query(session, api_key, q):
 
 async def build_html_tree(resp):
     parser = etree.HTMLParser()
-    chunk_size = 1024
+    chunk_size = 4096
     while True:
         chunk = await resp.content.read(chunk_size)
         if not chunk:
@@ -66,18 +63,12 @@ async def build_html_tree(resp):
     return pq(parser.close())
 
 
-async def fetch_content(session, pool, article):
+async def fetch_content(session, article):
     async with session.get(article['url']) as resp:
         try:
             resp.raise_for_status()
         except:
             return None
-        '''
-        return await asyncio.get_event_loop().run_in_executor(
-                pool, text_extract.do_parse,
-                article['source']['id'], article['title'], article['url'],
-                text)
-        '''
         tree = await build_html_tree(resp)
         if article['source']['id'] not in news_parsers.PARSERS:
             return None
@@ -89,18 +80,18 @@ async def fetch_content(session, pool, article):
 async def handler(request):
     query = request.query['q']
     session = request.app['session']
-    pool = request.app['pool']
     api_key = request.app['apikey']
-    # TODO more parallellism!
-    raw_articles = await asyncio.gather(
-            *(fetch_content(session, pool, a)
-                for a in await newsapi_query(session, api_key, query)))
-    raw_articles = [x for x in raw_articles if x is not None]
+    incoming = asyncio.as_completed(
+            [fetch_content(session, a)
+                for a in await newsapi_query(session, api_key, query)])
 
     seen_titles = []
     articles = []
     i = 0
-    for x in raw_articles:
+    for x_fut in incoming:
+        x = await x_fut
+        if x is None:
+            continue
         title = x['title']
         similar_titles = []
         for seen_title in seen_titles:
