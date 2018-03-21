@@ -7,6 +7,7 @@ from aiohttp import web
 from concurrent.futures import ProcessPoolExecutor
 import text_extract
 from fuzzywuzzy import fuzz
+import re
 
 import cluster
 import summarize
@@ -38,12 +39,14 @@ async def newsapi_query(session, api_key, q):
         'apikey': api_key,
         'language': 'en',
         'sortBy': 'publishedAt',
-        'q': q
+        'q': q,
+		'sources': 'abc-news, bbc-news, cnbc, cnn, fox-news, financial-times, google-news, nbc-news, msnbc, reuters, politico, the-economist, time, the-washington-post, the-wall-street-journal, the-new-york-times, usa-today, vice-news'
     }
     async with session.get(URL, params=query_pairs) as resp:
         resp.raise_for_status()
         data = await resp.json()
         if data['status'] != 'ok':
+            print('not okay')
             raise NewsApiError
         return data['articles']
 
@@ -53,10 +56,17 @@ async def fetch_content(session, pool, article):
         try:
             resp.raise_for_status()
         except:
+            print(resp)
             return None
         text = await resp.text()
-        return await asyncio.get_event_loop().run_in_executor(
+        response = await asyncio.get_event_loop().run_in_executor(
                 pool, text_extract.do_readability, text)
+
+        response['source'] = article['source']['name']
+        response['url'] = article['url']
+        response['image_url'] = article['urlToImage']
+
+        return response
 
 
 async def handler(request):
@@ -68,45 +78,39 @@ async def handler(request):
             *(fetch_content(session, pool, a)
                 for a in await newsapi_query(session, api_key, query)))
     raw_articles = [x for x in raw_articles if x is not None]
-
-    print([x['title'] for x in raw_articles])
+    # import pdb
+    # pdb.set_trace()
 
     seen_titles = []
     articles = []
     i = 0
-    for x in raw_articles:
-        title = x['title']
+    for article in raw_articles:
+        title = article['title']
         similar_titles = []
         for seen_title in seen_titles:
             if fuzz.ratio(title, seen_title) > 80:
                 similar_titles.append(title)
         if len(similar_titles) > 0:
-            pass
+             pass
         else:
-            seen_titles.append(title)
-            article = {
-                "_id": i,
-                "title": x['title'],
-                "text_content": x['text'],
-            }
-            articles.append(article)
-            i += 1
+             seen_titles.append(title)
+             # import pdb
+             # pdb.set_trace()
+             article['id'] = i
+             # TODO: wait on kevs impleentation
+             article['text'] = re.sub('[\n\t]', '', article['text'])
+             articles.append(article)
+             i += 1
 
     clusters = cluster.cluster_articles(articles)
-    print(clusters)
     summaries = summarize.summarize_clusters_lexrank(clusters)
 
     output_obj = []
-    for summary in summaries:
-        sentences = summary['sentences']
-        summary_sentences = []
-        for sentence in sentences:
-            text = sentence['text']
-            summary_sentences.append(text)
-
+    for i, summary in enumerate(summaries):
         output_obj.append({
             'title': summary['title'],
-            'summary': ' '.join(summary_sentences)
+            'summary': summary['text'],
+            'articles': [article for article in clusters[i]['articles']]
         })
 
     return json_response(output_obj)
