@@ -7,9 +7,11 @@ from aiohttp import web
 import text_extract
 import news_parsers
 from fuzzywuzzy import fuzz
+
 from lxml import etree
 from pyquery import PyQuery as pq
 
+import re
 '''
 import cluster
 import summarize
@@ -41,6 +43,7 @@ async def newsapi_query(session, api_key, q):
         'language': 'en',
         'sortBy': 'publishedAt',
         'q': q,
+
         'pageSize': 100,
         'sources': ','.join(news_parsers.PARSERS.keys())
     }
@@ -48,6 +51,7 @@ async def newsapi_query(session, api_key, q):
         resp.raise_for_status()
         data = await resp.json()
         if data['status'] != 'ok':
+            print('not okay')
             raise NewsApiError
         return data['articles']
 
@@ -68,6 +72,7 @@ async def fetch_content(session, article):
         try:
             resp.raise_for_status()
         except:
+            print(resp)
             return None
         tree = await build_html_tree(resp)
         if article['source']['id'] not in news_parsers.PARSERS:
@@ -75,6 +80,13 @@ async def fetch_content(session, article):
         return text_extract.do_parse(
                 article['source']['id'], article['title'], article['url'],
                 tree)
+
+
+        response['source'] = article['source']['name']
+        response['url'] = article['url']
+        response['image_url'] = article['urlToImage']
+
+        return response
 
 
 async def handler(request):
@@ -85,21 +97,25 @@ async def handler(request):
             [fetch_content(session, a)
                 for a in await newsapi_query(session, api_key, query)])
 
+
     seen_titles = []
     articles = []
     i = 0
+
     for x_fut in incoming:
         x = await x_fut
         if x is None:
             continue
         title = x['title']
+
         similar_titles = []
         for seen_title in seen_titles:
             if fuzz.ratio(title, seen_title) > 80:
                 similar_titles.append(title)
         if len(similar_titles) > 0:
-            pass
+             pass
         else:
+
             seen_titles.append(title)
             article = {
                 "_id": i,
@@ -112,20 +128,14 @@ async def handler(request):
 
     '''
     clusters = cluster.cluster_articles(articles)
-    print(clusters)
     summaries = summarize.summarize_clusters_lexrank(clusters)
 
     output_obj = []
-    for summary in summaries:
-        sentences = summary['sentences']
-        summary_sentences = []
-        for sentence in sentences:
-            text = sentence['text']
-            summary_sentences.append(text)
-
+    for i, summary in enumerate(summaries):
         output_obj.append({
             'title': summary['title'],
-            'summary': ' '.join(summary_sentences)
+            'summary': summary['text'],
+            'articles': [article for article in clusters[i]['articles']]
         })
 
     return json_response(output_obj)

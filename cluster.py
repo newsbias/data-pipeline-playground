@@ -25,7 +25,7 @@ def cluster_articles(articles):
     if len(articles) > 0:
         tfidf = TfidfVectorizer(tokenizer=preprocess, norm='l2', smooth_idf=True)
 
-        titles = [article["text_content"] for article in articles]
+        titles = [article["title"] for article in articles]
 
         X_tfidf = tfidf.fit_transform(titles).toarray()
 
@@ -42,21 +42,26 @@ def cluster_articles(articles):
                 convergence_iter=400, copy=True,
                 affinity='euclidean', verbose=True)
         '''
-        hc = AgglomerativeClustering(linkage='complete', affinity='cosine', n_clusters=7)
+        '''
+        hc = AgglomerativeClustering(linkage='complete', affinity='cosine', n_clusters=5)
 
         C = hc.fit_predict(X_tfidf)
+		num_clusters = max(hc.labels_) + 1
+        '''
+        num_clusters = len(articles / 4)
+        km = KMeans(n_clusters=, init='k-means++', max_iter=100, n_init=1, verbose=True)
+		C = km.fit_predict(X_tfidf)
+
         # print("shape: tfidf, AP predicted")
         # print(X_tfidf.shape, C.shape)
         # print("clusters", len(C))
         # print(hc.labels_)
 
-        num_clusters = max(hc.labels_) + 1
+
 
         for c in range(num_clusters):
-
             cluster = {
                 "articles": [articles[member] for member in np.where(hc.labels_ == c)[0]],
-                "summarized": False,
                 "_id": c
             }
             clusters.append(cluster)
