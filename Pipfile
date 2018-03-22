@@ -19,6 +19,8 @@ fuzzywuzzy = "*"
 cchardet = "*"
 python-levenshtein = "*"
 pyquery = "*"
+gensim = "*"
+
 
 [dev-packages]
 
