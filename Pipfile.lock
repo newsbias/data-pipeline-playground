@@ -433,7 +433,7 @@
         },
         "sumpy": {
             "editable": true,
-            "git": "git@github.com:newsbias/sumpy.git",
+            "git": "https://github.com/newsbias/sumpy.git",
             "ref": "e03a5a4827b4a9888f4f33bedceae87d9acc1bed"
         },
         "trollius": {
