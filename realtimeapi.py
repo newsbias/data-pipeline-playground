@@ -2,7 +2,6 @@ import aiohttp
 import asyncio
 import os
 import sys
-import json
 from aiohttp import web
 import text_extract
 import news_parsers
@@ -11,21 +10,12 @@ from lxml import etree
 from pyquery import PyQuery as pq
 import lda
 
-'''
-import cluster
-import summarize
-'''
-
 
 URL = 'https://newsapi.org/v2/everything'
 
 
 class NewsApiError(Exception):
     pass
-
-
-def json_response(obj):
-    return web.Response(text=json.dumps(obj), content_type='application/json')
 
 
 async def init(app):
@@ -61,7 +51,11 @@ async def build_html_tree(resp):
         if not chunk:
             break
         parser.feed(chunk)
-    return pq(parser.close())
+    try:
+        return pq(parser.close())
+    except etree.XMLSyntaxError as e:
+        print('syntax error: {}'.format(str(e)))
+        return None
 
 
 async def fetch_content(session, article):
@@ -111,7 +105,7 @@ async def handler(request):
             articles.append(article)
             i += 1
 
-    return json_response(lda.do_cluster(articles))
+    return web.json_response(lda.do_cluster(articles))
 
 
 app = web.Application()

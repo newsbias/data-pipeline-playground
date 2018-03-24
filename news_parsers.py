@@ -1,6 +1,12 @@
 def gen_parser(selector):
     def parse(d):
-        elts = d(selector).remove('script').remove('style')
+        if d is None:
+            return None
+        elts = d(selector)
+        if elts is not None:
+            elts = elts.remove('script')
+        if elts is not None:
+            elts = elts.remove('style')
         if len(elts) != 1:
             return None
         return elts.text()
