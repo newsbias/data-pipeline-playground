@@ -5,6 +5,7 @@ import sys
 from aiohttp import web
 import text_extract
 import news_parsers
+import wikipedia
 from fuzzywuzzy import fuzz
 from lxml import etree
 from pyquery import PyQuery as pq
@@ -72,7 +73,7 @@ async def fetch_content(session, article):
                 tree)
 
 
-async def handler(request):
+async def search_handler(request):
     query = request.query['q']
     session = request.app['session']
     api_key = request.app['apikey']
@@ -87,6 +88,7 @@ async def handler(request):
         x = await x_fut
         if x is None:
             continue
+        # TODO do this earlier, maybe at the newsapi level?
         title = x['title']
         similar_titles = []
         for seen_title in seen_titles:
@@ -108,6 +110,35 @@ async def handler(request):
     return web.json_response(lda.do_cluster(articles))
 
 
+async def wikipedia_handler(request):
+    try:
+        query_text = request.query['q']
+    except KeyError:
+        raise web.HTTPBadRequest
+
+    data = await wikipedia.query(request.app['session'], query_text)
+    if len(data['query']['pages']) < 1:
+        return web.json_response({
+            'found': False
+        })
+    page = data['query']['pages'][0]
+    parsed = await wikipedia.parse(request.app['session'], page)
+    image = None
+    if len(parsed['parse']['images']) > 0:
+        for img in parsed['parse']['images']:
+            # TODO better filter
+            if img.endswith('.svg'):
+                continue
+            image = img
+            break
+    return web.json_response({
+        'found': True,
+        'title': page['title'],
+        'summary': None,  # TODO
+        'image': image
+    })
+
+
 app = web.Application()
 apikey = os.environ.get('NB_NEWSAPI_API_KEY', None)
 if apikey is None:
@@ -118,5 +149,6 @@ app['apikey'] = apikey
 app.on_startup.append(init)
 app.on_cleanup.append(close)
 
-app.router.add_get('/search', handler)
+app.router.add_get('/search', search_handler)
+app.router.add_get('/wikipedia', wikipedia_handler)
 web.run_app(app, port=int(os.environ.get('PORT', '8080')))
