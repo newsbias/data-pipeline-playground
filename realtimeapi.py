@@ -116,12 +116,14 @@ async def wikipedia_handler(request):
     except KeyError:
         raise web.HTTPBadRequest
 
-    data = await wikipedia.query(request.app['session'], query_text)
+    data = await wikipedia.query_extract_intro_text(
+            request.app['session'], query_text)
     if len(data['query']['pages']) < 1:
         return web.json_response({
             'found': False
         })
     page = data['query']['pages'][0]
+    '''
     parsed = await wikipedia.parse(request.app['session'], page)
     image = None
     if len(parsed['parse']['images']) > 0:
@@ -131,11 +133,12 @@ async def wikipedia_handler(request):
                 continue
             image = img
             break
+    '''
     return web.json_response({
         'found': True,
         'title': page['title'],
-        'summary': None,  # TODO
-        'image': image
+        'summary': page['extract'],
+        'image': None
     })
 
 

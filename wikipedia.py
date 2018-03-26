@@ -4,6 +4,9 @@ DEFAULT_QUERYPARAMS = {
 }
 
 
+URL = 'https://en.wikipedia.org/w/api.php'
+
+
 async def _get_json(session, url, query_params):
     params = query_params.copy()
     params.update(DEFAULT_QUERYPARAMS)
@@ -12,8 +15,7 @@ async def _get_json(session, url, query_params):
         return await resp.json()
 
 
-async def query(session, q):
-    URL = 'https://en.wikipedia.org/w/api.php'
+async def query_content(session, q):
     query_params = {
         'action': 'query',
         'prop': 'revisions',
@@ -24,8 +26,20 @@ async def query(session, q):
     return await _get_json(session, URL, query_params)
 
 
+async def query_extract_intro_text(session, q, num_sentences=3):
+    query_params = {
+        'action': 'query',
+        'prop': 'extracts',
+        'redirects': 'true',
+        'exintro': 'true',
+        'exsentences': num_sentences,
+        'explaintext': 'true',
+        'titles': q
+    }
+    return await _get_json(session, URL, query_params)
+
+
 async def parse(session, page):
-    URL = 'https://en.wikipedia.org/w/api.php'
     query_params = {
         'action': 'parse',
         'prop': 'text|images|templates',
