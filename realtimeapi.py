@@ -73,40 +73,45 @@ async def fetch_content(session, article):
                 tree)
 
 
-async def search_handler(request):
-    query = request.query['q']
-    session = request.app['session']
-    api_key = request.app['apikey']
-    incoming = asyncio.as_completed(
-            [fetch_content(session, a)
-                for a in await newsapi_query(session, api_key, query)])
+async def newsapi_fetch(session, api_key, query):
+    raw_articles = await newsapi_query(session, api_key, query)
 
-    seen_titles = []
+    def title_filter():
+        seen_titles = []
+        for ra in raw_articles:
+            title = ra['title']
+            found_similar = False
+            for seen_title in seen_titles:
+                if fuzz.ratio(title, seen_title) > 80:
+                    found_similar = True
+                    break
+            if not found_similar:
+                seen_titles.append(title)
+                yield ra
+
+    incoming = asyncio.as_completed(
+            [fetch_content(session, a) for a in title_filter()])
+
     articles = []
     i = 0
     for x_fut in incoming:
         x = await x_fut
-        if x is None:
-            continue
-        # TODO do this earlier, maybe at the newsapi level?
-        title = x['title']
-        similar_titles = []
-        for seen_title in seen_titles:
-            if fuzz.ratio(title, seen_title) > 80:
-                similar_titles.append(title)
-        if len(similar_titles) > 0:
-            pass
-        else:
-            seen_titles.append(title)
-            article = {
-                "_id": i,
-                "title": x['title'],
-                "text_content": x['text'],
-                "url": x['url']
-            }
-            articles.append(article)
+        if x is not None:
+            x['_id'] = i
+            articles.append(x)
             i += 1
+    return articles
 
+
+async def search_handler(request):
+    try:
+        query = request.query['q']
+    except KeyError:
+        raise web.HTTPBadRequest
+    session = request.app['session']
+    api_key = request.app['apikey']
+
+    articles = await newsapi_fetch(session, api_key, query)
     return web.json_response(lda.do_cluster(articles))
 
 
