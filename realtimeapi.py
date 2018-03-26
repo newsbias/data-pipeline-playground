@@ -116,29 +116,25 @@ async def wikipedia_handler(request):
     except KeyError:
         raise web.HTTPBadRequest
 
-    data = await wikipedia.query_extract_intro_text(
+    data = await wikipedia.query_extract_intro_text_image(
             request.app['session'], query_text)
     if len(data['query']['pages']) < 1:
         return web.json_response({
             'found': False
         })
     page = data['query']['pages'][0]
-    '''
-    parsed = await wikipedia.parse(request.app['session'], page)
-    image = None
-    if len(parsed['parse']['images']) > 0:
-        for img in parsed['parse']['images']:
-            # TODO better filter
-            if img.endswith('.svg'):
-                continue
-            image = img
-            break
-    '''
+    try:
+        image = page['original']['source']
+    except KeyError:
+        try:
+            image = page['thumbnail']['source']
+        except KeyError:
+            image = None
     return web.json_response({
         'found': True,
         'title': page['title'],
         'summary': page['extract'],
-        'image': None
+        'image': image
     })
 
 

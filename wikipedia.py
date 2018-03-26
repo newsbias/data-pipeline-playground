@@ -15,28 +15,21 @@ async def _get_json(session, url, query_params):
         return await resp.json()
 
 
-async def query_content(session, q):
-    query_params = {
-        'action': 'query',
-        'prop': 'revisions',
-        'redirects': 'true',
-        'rvprop': 'content',
-        'titles': q
-    }
-    return await _get_json(session, URL, query_params)
+async def query(session, **params):
+    params['action'] = 'query'
+    return await _get_json(session, URL, params)
 
 
-async def query_extract_intro_text(session, q, num_sentences=3):
-    query_params = {
-        'action': 'query',
-        'prop': 'extracts',
-        'redirects': 'true',
-        'exintro': 'true',
-        'exsentences': num_sentences,
-        'explaintext': 'true',
-        'titles': q
-    }
-    return await _get_json(session, URL, query_params)
+async def query_extract_intro_text_image(session, q, num_sentences=3):
+    return await query(session,
+                       prop='extracts|pageimages',
+                       redirects='true',
+                       piprop='original|thumbnail',
+                       pithumbsize='100',
+                       exintro='true',
+                       exsentences=num_sentences,
+                       explaintext='true',
+                       titles=q)
 
 
 async def parse(session, page):
