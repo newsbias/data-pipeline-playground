@@ -46,24 +46,23 @@ def do_cluster(obj):
 
 	model = LdaModel(
 		corpus,
-		num_topics=len(texts) / 5,
+		num_topics=5,
 		id2word=dictionary,
-	    update_every=5,
-	    chunksize=10000,
-	    passes=100
+	    update_every=3,
+	    chunksize=1000,
+	    passes=10
 	)
 
 
-
-	i = 0
+	topic_matrix = model.show_topics(formatted=False)
 	clusters = {}
-	for document in corpus:
+	for i, topic in enumerate(topic_matrix):
+		clusters[i] = {"keywords": [str(word) for word, _ in topic[1]], "articles": []}
+
+	for i, document in enumerate(corpus):
 
 		cluster = np.argmax(np.array(model.get_document_topics(document))[:,1])
-		if cluster not in clusters:
-			clusters[cluster] = [i]
-		else:
-			clusters[cluster].append(i)
-		i += 1
+		clusters[cluster]['articles'].append(obj[i])
 
-	return [ {"articles": [obj[id] for id in cluster] } for _, cluster in clusters.items() ]
+
+	return clusters
