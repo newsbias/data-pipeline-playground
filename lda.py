@@ -41,7 +41,7 @@ def process(texts):
 	return corpus, dictionary
 
 def do_cluster(obj):
-	texts = [article['text_content'] + article['title'] for article in obj]
+	texts = [article['text'] + article['title'] for article in obj]
 	corpus, dictionary = process(texts)
 
 	model = LdaModel(
