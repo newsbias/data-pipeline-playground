@@ -4,6 +4,8 @@ import os
 import sys
 import datetime
 from aiohttp import web
+import aiohttp_cors
+import text_extract
 import news_parsers
 import wikipedia
 from fuzzywuzzy import fuzz
@@ -45,6 +47,7 @@ async def newsapi_query(session, api_key, q, id):
         if data['status'] != 'ok':
             raise NewsApiError
         return (id, data['articles'])
+
 
 
 async def build_html_tree(resp):
@@ -205,6 +208,15 @@ app['apikey'] = apikey
 app.on_startup.append(init)
 app.on_cleanup.append(close)
 
-app.router.add_get('/search', search_handler)
-app.router.add_get('/wikipedia', wikipedia_handler)
+cors = aiohttp_cors.setup(app, defaults={
+    "*": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*",
+        )
+})
+
+cors.add(app.router.add_get('/search', search_handler))
+cors.add(app.router.add_get('/wikipedia', wikipedia_handler))
+
 web.run_app(app, port=int(os.environ.get('PORT', '8080')))
