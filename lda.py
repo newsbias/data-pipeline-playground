@@ -10,59 +10,55 @@ from gensim import corpora
 from gensim.models import LdaModel
 
 class Processor:
-	def __init__(self):
+	def __init__(self, query):
 		self.stemmer = PorterStemmer()
 		self.stop = stopwords.words('english')
+		self.query = query
 
 	def get_tokens(self, text):
 
-		tokens = [ self.stemmer.stem(word) \
+		accepted_pos = ['NNP', 'NNS']
+
+		tokens = [ word
 					for sent in sent_tokenize(text) \
-						for word in word_tokenize(sent) \
-							if word not in self.stop \
-							and len(word) > 2 ]
+						for word, pos in pos_tag(word_tokenize(sent)) \
+							if pos in accepted_pos and \
+							word not in self.query \
+							and len(word) > 2]
 		return tokens
 
 
-def filter_extremes(texts):
+def do_cluster(obj, query):
+	texts = [article['title'] for article in obj]
 
-	dictionary = corpora.Dictionary(texts)
-
-	dictionary.filter_extremes(no_below=1, no_above=0.8)
-
-	return [dictionary.doc2bow(text) for text in texts], dictionary
-
-def process(texts):
-	processor = Processor()
+	processor = Processor(query)
 
 	tokens = [processor.get_tokens(text) for text in texts]
 
-	corpus, dictionary = filter_extremes(tokens)
-	return corpus, dictionary
 
-def do_cluster(obj):
-	texts = [article['text'] + article['title'] for article in obj]
-	corpus, dictionary = process(texts)
+	dictionary = corpora.Dictionary(tokens)
+	corpus = [dictionary.doc2bow(text) for text in texts]
 
+	num_clusters = len(texts) / 5
 	model = LdaModel(
 		corpus,
-		num_topics=5,
+		num_topics=num_clusters,
 		id2word=dictionary,
-	    update_every=3,
-	    chunksize=1000,
-	    passes=10
+	    update_every=5,
+	    chunksize=10000,
+	    passes=50
 	)
 
+	# size 10
+	topic_matrix = model.show_topics(formatted=False, num_topics=num_clusters)
 
-	topic_matrix = model.show_topics(formatted=False)
-	clusters = {}
-	for i, topic in enumerate(topic_matrix):
-		clusters[i] = {"keywords": [str(word) for word, _ in topic[1]], "articles": []}
+	clusters = [{"keywords": [str(word) for word, _ in topic[1]], "articles": []} for topic in topic_matrix]
 
 	for i, document in enumerate(corpus):
 
-		cluster = np.argmax(np.array(model.get_document_topics(document))[:,1])
-		clusters[cluster]['articles'].append(obj[i])
+		topic = np.array(model.get_document_topics(document))
+		cluster = int(topic[np.argmax(topic[:,1])][0])
 
+		clusters[cluster]['articles'].append(obj[i])
 
 	return clusters
