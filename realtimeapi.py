@@ -3,6 +3,7 @@ import asyncio
 import os
 import sys
 from aiohttp import web
+import aiohttp_cors
 import text_extract
 import news_parsers
 import wikipedia
@@ -42,6 +43,7 @@ async def newsapi_query(session, api_key, q):
         if data['status'] != 'ok':
             raise NewsApiError
         return data['articles']
+
 
 
 async def build_html_tree(resp):
@@ -112,7 +114,7 @@ async def search_handler(request):
     api_key = request.app['apikey']
 
     articles = await newsapi_fetch(session, api_key, query)
-    return web.json_response(lda.do_cluster(articles))
+    return web.json_response(lda.do_cluster(articles, query))
 
 
 async def wikipedia_handler(request):
@@ -153,6 +155,15 @@ app['apikey'] = apikey
 app.on_startup.append(init)
 app.on_cleanup.append(close)
 
-app.router.add_get('/search', search_handler)
-app.router.add_get('/wikipedia', wikipedia_handler)
+cors = aiohttp_cors.setup(app, defaults={
+    "*": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*",
+        )
+})
+
+cors.add(app.router.add_get('/search', search_handler))
+cors.add(app.router.add_get('/wikipedia', wikipedia_handler))
+
 web.run_app(app, port=int(os.environ.get('PORT', '8080')))
