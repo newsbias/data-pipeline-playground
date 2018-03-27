@@ -37,7 +37,8 @@ def do_cluster(obj, query):
 
 
 	dictionary = corpora.Dictionary(tokens)
-	corpus = [dictionary.doc2bow(text) for text in texts]
+
+	corpus = [dictionary.doc2bow(token) for token in tokens]
 
 	num_clusters = len(texts) / 5
 	model = LdaModel(
