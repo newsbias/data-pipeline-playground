@@ -2,6 +2,7 @@ import aiohttp
 import asyncio
 import os
 import sys
+import datetime
 from aiohttp import web
 import text_extract
 import news_parsers
@@ -9,7 +10,6 @@ import wikipedia
 from fuzzywuzzy import fuzz
 from lxml import etree
 from pyquery import PyQuery as pq
-import lda
 
 
 URL = 'https://newsapi.org/v2/everything'
@@ -27,13 +27,17 @@ async def close(app):
     await app['session'].close()
 
 
-async def newsapi_query(session, api_key, q):
+async def newsapi_query(session, api_key, q, id):
+    today = datetime.datetime.now().date()
+    two_weeks_ago = today - datetime.timedelta(weeks=2)
     query_pairs = {
         'apikey': api_key,
         'language': 'en',
-        'sortBy': 'publishedAt',
+        'sortBy': 'relevancy',
+        'from': two_weeks_ago.isoformat(),
+        'to': today.isoformat(),
         'q': q,
-        'pageSize': 100,
+        'pageSize': 5,
         'sources': ','.join(news_parsers.PARSERS.keys())
     }
     async with session.get(URL, params=query_pairs) as resp:
@@ -41,7 +45,7 @@ async def newsapi_query(session, api_key, q):
         data = await resp.json()
         if data['status'] != 'ok':
             raise NewsApiError
-        return data['articles']
+        return (id, data['articles'])
 
 
 async def build_html_tree(resp):
@@ -59,7 +63,7 @@ async def build_html_tree(resp):
         return None
 
 
-async def fetch_content(session, article):
+async def fetch_content(session, article, id):
     async with session.get(article['url']) as resp:
         try:
             resp.raise_for_status()
@@ -68,39 +72,28 @@ async def fetch_content(session, article):
         tree = await build_html_tree(resp)
         if article['source']['id'] not in news_parsers.PARSERS:
             return None
-        return text_extract.do_parse(
+        return (id, text_extract.do_parse(
                 article['source']['id'], article['title'], article['url'],
-                tree)
+                tree))
 
 
-async def newsapi_fetch(session, api_key, query):
-    raw_articles = await newsapi_query(session, api_key, query)
+def query_heuristic(page_title, section):
+    RESERVED = set((
+        'External links',
+        'References',
+        'Bibliography',
+        'Notes',
+        'See also'
+    ))
+    if section['line'] in RESERVED:
+        return 0
+    return 1
 
-    def title_filter():
-        seen_titles = []
-        for ra in raw_articles:
-            title = ra['title']
-            found_similar = False
-            for seen_title in seen_titles:
-                if fuzz.ratio(title, seen_title) > 80:
-                    found_similar = True
-                    break
-            if not found_similar:
-                seen_titles.append(title)
-                yield ra
 
-    incoming = asyncio.as_completed(
-            [fetch_content(session, a) for a in title_filter()])
-
-    articles = []
-    i = 0
-    for x_fut in incoming:
-        x = await x_fut
-        if x is not None:
-            x['_id'] = i
-            articles.append(x)
-            i += 1
-    return articles
+def construct_query(page_title, section):
+    return ' '.join((
+        '"{}"'.format(page_title),
+        '+"{}"'.format(section['line'])))
 
 
 async def search_handler(request):
@@ -111,8 +104,62 @@ async def search_handler(request):
     session = request.app['session']
     api_key = request.app['apikey']
 
-    articles = await newsapi_fetch(session, api_key, query)
-    return web.json_response(lda.do_cluster(articles))
+    # submit query to wikipedia
+    query_resp = await wikipedia.query(session, titles=query, redirects='true')
+    if len(query_resp['query']['pages']) < 1:
+        raise web.HTTPNotFound  # TODO something else is probably better
+
+    # TODO heuristic on page names?
+    page = query_resp['query']['pages'][0]
+    sections_resp = await wikipedia.parse_sections(session, page)
+    page_title = sections_resp['parse']['title']
+    sects = []
+    for s in sections_resp['parse']['sections']:
+        sects.append(s)
+
+    NUM_QUERIES = 10
+    sects_to_query = [
+        (x['line'], construct_query(page_title, x)) for x in sorted(
+            sects,
+            key=lambda x: query_heuristic(page_title, x),
+            reverse=True)[:NUM_QUERIES]]
+
+    clusters = []
+    for line, _ in sects_to_query:
+        clusters.append({
+            'keywords': line,
+            'articles': []
+        })
+
+    newsapi_res_by_section = asyncio.as_completed(
+            [newsapi_query(session, api_key, s, i)
+             for i, (_, s) in enumerate(sects_to_query)])
+
+    seen_titles = []
+    article_fetchers = []
+    for fut in newsapi_res_by_section:
+        i, raw_articles = await fut
+        for ra in raw_articles:
+            title = ra['title']
+            found_similar = False
+            for seen_title in seen_titles:
+                if fuzz.ratio(title, seen_title) > 80:
+                    found_similar = True
+                    break
+            if not found_similar:
+                seen_titles.append(title)
+                article_fetchers.append(fetch_content(session, ra, i))
+
+    article_fetcher_results = asyncio.as_completed(article_fetchers)
+    j = 0
+    for fut in article_fetcher_results:
+        i, art = await fut
+        if art is not None:
+            art['_id'] = j
+            clusters[i]['articles'].append(art)
+            j += 1
+
+    return web.json_response([c for c in clusters if len(c['articles']) > 0])
 
 
 async def wikipedia_handler(request):

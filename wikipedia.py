@@ -32,10 +32,11 @@ async def query_extract_intro_text_image(session, q, num_sentences=3):
                        titles=q)
 
 
-async def parse(session, page):
-    query_params = {
-        'action': 'parse',
-        'prop': 'text|images|templates',
-        'pageid': page['pageid']
-    }
-    return await _get_json(session, URL, query_params)
+async def parse(session, page, **params):
+    params['action'] = 'parse'
+    params['pageid'] = page['pageid']
+    return await _get_json(session, URL, params)
+
+
+async def parse_sections(session, page):
+    return await parse(session, page, prop='sections')
