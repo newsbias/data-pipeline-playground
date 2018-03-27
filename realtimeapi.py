@@ -4,7 +4,6 @@ import os
 import sys
 import datetime
 from aiohttp import web
-import text_extract
 import news_parsers
 import wikipedia
 from fuzzywuzzy import fuzz
@@ -72,9 +71,15 @@ async def fetch_content(session, article, id):
         tree = await build_html_tree(resp)
         if article['source']['id'] not in news_parsers.PARSERS:
             return None
-        return (id, text_extract.do_parse(
-                article['source']['id'], article['title'], article['url'],
-                tree))
+        parser = news_parsers.PARSERS[article['source']['id']]
+        processed = parser(tree)
+        if processed is None:
+            return (id, None)
+        return (id, {
+            'text': processed,
+            'title': article['title'],
+            'url': article['url']
+        })
 
 
 def query_heuristic(page_title, section):
