@@ -121,9 +121,9 @@ async def search_handler(request):
     page = query_resp['query']['pages'][0]
     sections_resp = await wikipedia.parse_sections(session, page)
     page_title = sections_resp['parse']['title']
-    sects = []
-    for s in sections_resp['parse']['sections']:
-        sects.append(s)
+    sects = sorted(
+            sections_resp['parse']['sections'],
+            key=lambda x: x['toclevel'], reverse=True)
 
     NUM_QUERIES = 10
     sects_to_query = [
@@ -161,11 +161,13 @@ async def search_handler(request):
     article_fetcher_results = asyncio.as_completed(article_fetchers)
     j = 0
     for fut in article_fetcher_results:
-        i, art = await fut
-        if art is not None:
-            art['_id'] = j
-            clusters[i]['articles'].append(art)
-            j += 1
+        v = await fut
+        if v is not None:
+            i, art = v
+            if art is not None:
+                art['_id'] = j
+                clusters[i]['articles'].append(art)
+                j += 1
 
     return web.json_response([c for c in clusters if len(c['articles']) > 0])
 
