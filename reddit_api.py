@@ -72,8 +72,16 @@ async def search_handler(request):
         raise web.HTTPBadRequest
     session = request.app['session']
 
+    og_query = await wikipedia.query(
+            request.app['session'],
+            list='search',
+            srsearch=query)
+    if len(og_query['query']['search']) < 1:
+        raise web.HTTPNotFound  # TODO something else is probably better
+
     # submit query to wikipedia
-    query_resp = await wikipedia.query(session, titles=query, redirects='true')
+    query_resp = await wikipedia.query(
+            session, pageids=og_query['query']['search'][0]['pageid'])
     if len(query_resp['query']['pages']) < 1:
         raise web.HTTPNotFound  # TODO something else is probably better
 
