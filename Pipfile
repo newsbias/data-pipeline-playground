@@ -20,7 +20,6 @@ cchardet = "*"
 python-levenshtein = "*"
 pyquery = "*"
 gensim = "*"
-aiohttp-cors = "*"
 
 
 [dev-packages]

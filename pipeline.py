@@ -17,7 +17,8 @@ def main():
     with open(sys.argv[1]) as f:
         data = json.load(f)
 
-    # eliminates articles with titles that have similar ordering of words in the title (high ratio that article is similar)
+    # eliminates articles with titles that have similar ordering of words in
+    # the title (high ratio that article is similar)
     seen_titles = []
     articles = []
     i = 0

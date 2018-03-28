@@ -1,10 +1,7 @@
 import aiohttp
 import asyncio
 import os
-import sys
-import datetime
 from aiohttp import web
-import aiohttp_cors
 import news_parsers
 import wikipedia
 from fuzzywuzzy import fuzz
@@ -38,13 +35,12 @@ async def build_html_tree(resp):
 
 async def fetch_content(session, article, id):
     async with session.get(article['url']) as resp:
-        try:
-            resp.raise_for_status()
-        except:
-            return None
+        if resp.status == 404:
+            return (id, None)
+        resp.raise_for_status()
         tree = await build_html_tree(resp)
         if article['source'] not in news_parsers.REDDIT_PARSERS:
-            return None
+            return (id, None)
         parser = news_parsers.REDDIT_PARSERS[article['source']]
         processed = parser(tree)
         if processed is None:
@@ -85,16 +81,15 @@ async def search_handler(request):
     page = query_resp['query']['pages'][0]
     sections_resp = await wikipedia.parse_sections(session, page)
     page_title = sections_resp['parse']['title']
-    sects = []
-    for s in sections_resp['parse']['sections']:
-        sects.append(s)
 
     NUM_QUERIES = 10
     sects_to_query = [
         x['line'] for x in sorted(
-            sects,
+            sections_resp['parse']['sections'],
             key=lambda x: query_heuristic(page_title, x),
             reverse=True)[:NUM_QUERIES]]
+
+    print(sects_to_query)
 
     clusters = []
     for line in sects_to_query:
@@ -162,19 +157,18 @@ async def wikipedia_handler(request):
     })
 
 
-app = web.Application()
+@web.middleware
+async def cors(request, handler):
+    response = await handler(request)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
+app = web.Application(middlewares=[cors])
 app.on_startup.append(init)
 app.on_cleanup.append(close)
 
-cors = aiohttp_cors.setup(app, defaults={
-    "*": aiohttp_cors.ResourceOptions(
-        allow_credentials=True,
-        expose_headers="*",
-        allow_headers="*",
-    )
-})
-
-cors.add(app.router.add_get('/search', search_handler))
-cors.add(app.router.add_get('/wikipedia', wikipedia_handler))
+app.router.add_get('/search', search_handler)
+app.router.add_get('/wikipedia', wikipedia_handler)
 
 web.run_app(app, port=int(os.environ.get('PORT', '8080')))

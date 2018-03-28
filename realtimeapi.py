@@ -66,7 +66,7 @@ async def fetch_content(session, article, id):
     async with session.get(article['url']) as resp:
         try:
             resp.raise_for_status()
-        except:
+        except BaseException:
             return None
         tree = await build_html_tree(resp)
         if article['source']['id'] not in news_parsers.NEWSAPI_PARSERS:

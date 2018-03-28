@@ -59,9 +59,10 @@ def cluster_articles(articles):
 
         for c in range(num_clusters):
             cluster = {
-                "articles": [articles[member] for member in np.where(hc.labels_ == c)[0]],
-                "_id": c
-            }
+                "articles": [
+                    articles[member] for member in np.where(
+                        hc.labels_ == c)[0]],
+                "_id": c}
             clusters.append(cluster)
 
         '''
