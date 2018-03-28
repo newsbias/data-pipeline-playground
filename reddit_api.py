@@ -79,6 +79,8 @@ async def search_handler(request):
 
     # TODO heuristic on page names?
     page = query_resp['query']['pages'][0]
+    if 'pageid' not in page:
+        raise web.HTTPNotFound  # TODO something else is probably better
     sections_resp = await wikipedia.parse_sections(session, page)
     page_title = sections_resp['parse']['title']
 
