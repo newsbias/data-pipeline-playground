@@ -8,6 +8,7 @@ from fuzzywuzzy import fuzz
 from lxml import etree
 from pyquery import PyQuery as pq
 from reddit import reddit_query
+import sumpy
 
 
 async def init(app):
@@ -139,7 +140,17 @@ async def search_handler(request):
             clusters[i]['articles'].append(art)
             j += 1
 
-    return web.json_response([c for c in clusters if len(c['articles']) > 0])
+    non_empty_clusters = (c for c in clusters if len(c['articles']) > 0)
+    final_clusters = []
+    for c in non_empty_clusters:
+        text_summary = sumpy.lexrank([a['text'] for a in c['articles']])
+
+        top_sentences = ' '.join(
+                text_summary._df.head(3)['sent text'].tolist())
+        c['summary'] = top_sentences
+        final_clusters.append(c)
+
+    return web.json_response(final_clusters)
 
 
 async def wikipedia_handler(request):
