@@ -142,6 +142,10 @@ async def wikipedia_handler(request):
             'found': False
         })
     page = data['query']['pages'][0]
+    if 'pageid' not in page:
+        return web.json_response({
+            'found': False
+        })
     try:
         image = page['original']['source']
     except KeyError:
@@ -151,8 +155,8 @@ async def wikipedia_handler(request):
             image = None
     return web.json_response({
         'found': True,
-        'title': page['title'],
-        'summary': page['extract'],
+        'title': page.get('title', None),
+        'summary': page.get('extract', None),
         'image': image
     })
 
