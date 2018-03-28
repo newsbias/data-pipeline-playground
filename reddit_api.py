@@ -60,8 +60,12 @@ def query_heuristic(page_title, section):
         'Notes',
         'See also'
     ))
-    if section['line'] in RESERVED:
+    if section in RESERVED:
         return 0
+    if section == 'Stormy Daniels':
+        return 2
+    if section == 'Uncategorized':
+        return 3
     return 1
 
 
@@ -93,13 +97,33 @@ async def search_handler(request):
     page_title = sections_resp['parse']['title']
 
     NUM_QUERIES = 10
-    sects_to_query = [
-        x['line'] for x in sorted(
-            sections_resp['parse']['sections'],
-            key=lambda x: query_heuristic(page_title, x),
-            reverse=True)[:NUM_QUERIES]]
+    outlinks_by_sect_futures = []
 
-    sects_to_query.insert(0, 'Uncategorized')
+    async def parse_links_in_section(session, page, sect, i):
+        return (i, await wikipedia.parse_links_in_section(session, page, sect))
+    for i, sect in enumerate(sections_resp['parse']['sections']):
+        outlinks_by_sect_futures.append(
+                parse_links_in_section(session, page, sect, i))
+
+    outlinks_by_sect = [None] * len(sections_resp['parse']['sections'])
+    for fut in asyncio.as_completed(outlinks_by_sect_futures):
+        i, links = await fut
+        outlinks_by_sect[i] = [link['title']
+                               for link in links['parse']['links']
+                               if ':' not in link['title']]
+
+    sects_to_query = ['Uncategorized']
+    for (sect, outlinks) in zip(
+            sections_resp['parse']['sections'], outlinks_by_sect):
+        sects_to_query.append(sect['line'])
+        for outlink in outlinks:
+            sects_to_query.append(outlink)
+
+    sects_to_query = sorted(
+            sects_to_query,
+            key=lambda x: query_heuristic(page_title, x),
+            reverse=True)[:NUM_QUERIES]
+
     print(sects_to_query)
 
     clusters = []

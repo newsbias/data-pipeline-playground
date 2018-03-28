@@ -10,7 +10,7 @@ URL = 'https://en.wikipedia.org/w/api.php'
 async def _get_json(session, url, query_params):
     params = query_params.copy()
     params.update(DEFAULT_QUERYPARAMS)
-    async with session.get(url, params=params) as resp:
+    async with session.post(url, data=params) as resp:
         resp.raise_for_status()
         return await resp.json()
 
@@ -32,11 +32,25 @@ async def query_extract_intro_text_image(session, page_id, num_sentences=3):
                        pageids=page_id)
 
 
-async def parse(session, page, **params):
+async def _parse_nopage(session, **params):
     params['action'] = 'parse'
-    params['pageid'] = page['pageid']
     return await _get_json(session, URL, params)
+
+
+async def parse(session, page, **params):
+    return await _parse_nopage(session, pageid=page['pageid'], **params)
 
 
 async def parse_sections(session, page):
     return await parse(session, page, prop='sections')
+
+
+async def parse_links_in_section(session, page, section):
+    section_content = await parse(session, page,
+                                  section=section['index'], prop='wikitext')
+    section_content = section_content['parse']['wikitext']
+    section_content = section_content.replace('{{reflist}}', '')
+    links = await _parse_nopage(session, text=section_content,
+                                prop='links')
+    # TODO filter junk links?
+    return links
