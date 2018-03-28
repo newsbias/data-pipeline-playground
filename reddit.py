@@ -11,7 +11,8 @@ DEFAULT_QUERYPARAMS = {
 	'type': 'link'
 }
 
-NEWS_SITES = ['bbc', 'cnbc', 'economist', 'foxnews', 'nbcnews', 'nytimes', 'msnbc', 'reuters', 'politico', 'time', 'usatoday', 'washingtonpost', 'wsj', 'vice']
+NEWS_SITES = ['bbc', 'cnbc', 'economist', 'foxnews', 'nbcnews', 'nytimes', 'msnbc',
+    'reuters', 'politico', 'time', 'usatoday', 'washingtonpost', 'wsj', 'vice']
 
 QUERY_DEFAULT = "(site:" + " OR site:".join(NEWS_SITES) + ')'
 

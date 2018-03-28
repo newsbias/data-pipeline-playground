@@ -119,8 +119,8 @@ async def search_handler(request):
     sections_resp = await wikipedia.parse_sections(session, page)
     page_title = sections_resp['parse']['title']
     sects = sorted(
-            sections_resp['parse']['sections'],
-            key=lambda x: x['toclevel'], reverse=True)
+        sections_resp['parse']['sections'],
+        key=lambda x: x['toclevel'], reverse=True)
 
     NUM_QUERIES = 10
     sects_to_query = [
@@ -137,8 +137,8 @@ async def search_handler(request):
         })
 
     newsapi_res_by_section = asyncio.as_completed(
-            [newsapi_query(session, api_key, s, i)
-             for i, (_, s) in enumerate(sects_to_query)])
+        [newsapi_query(session, api_key, s, i)
+         for i, (_, s) in enumerate(sects_to_query)])
 
     seen_titles = []
     article_fetchers = []
@@ -176,7 +176,7 @@ async def wikipedia_handler(request):
         raise web.HTTPBadRequest
 
     data = await wikipedia.query_extract_intro_text_image(
-            request.app['session'], query_text)
+        request.app['session'], query_text)
     if len(data['query']['pages']) < 1:
         return web.json_response({
             'found': False

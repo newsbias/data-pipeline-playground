@@ -9,7 +9,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 
-
 def preprocess(text):
     stemmer = PorterStemmer()
     stop = stopwords.words('english')
@@ -23,7 +22,8 @@ def cluster_articles(articles):
     clusters = []
     i = 0
     if len(articles) > 0:
-        tfidf = TfidfVectorizer(tokenizer=preprocess, norm='l2', smooth_idf=True)
+        tfidf = TfidfVectorizer(tokenizer=preprocess,
+                                norm='l2', smooth_idf=True)
 
         titles = [article["title"] for article in articles]
 
@@ -50,14 +50,12 @@ def cluster_articles(articles):
         '''
         num_clusters = len(articles / 4)
         km = KMeans(n_clusters=, init='k-means++', max_iter=100, n_init=1, verbose=True)
-		C = km.fit_predict(X_tfidf)
+            C = km.fit_predict(X_tfidf)
 
         # print("shape: tfidf, AP predicted")
         # print(X_tfidf.shape, C.shape)
         # print("clusters", len(C))
         # print(hc.labels_)
-
-
 
         for c in range(num_clusters):
             cluster = {
@@ -94,7 +92,5 @@ def cluster_articles(articles):
             clusters.append(cluster)
         '''
         # print("clusters\n", clusters)
-
-
 
     return clusters

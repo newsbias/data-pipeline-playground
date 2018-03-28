@@ -12,11 +12,14 @@ from lxml import etree
 from pyquery import PyQuery as pq
 from reddit import reddit_query
 
+
 async def init(app):
     app['session'] = aiohttp.ClientSession()
 
+
 async def close(app):
     await app['session'].close()
+
 
 async def build_html_tree(resp):
     parser = etree.HTMLParser()
@@ -52,6 +55,7 @@ async def fetch_content(session, article, id):
             'url': article['url']
         })
 
+
 def query_heuristic(page_title, section):
     RESERVED = set((
         'External links',
@@ -63,6 +67,7 @@ def query_heuristic(page_title, section):
     if section['line'] in RESERVED:
         return 0
     return 1
+
 
 async def search_handler(request):
     try:
@@ -99,8 +104,8 @@ async def search_handler(request):
         })
 
     reddit_res_by_section = asyncio.as_completed(
-            [reddit_query(session, (page_title, s), i)
-             for i, s in enumerate(sects_to_query)])
+        [reddit_query(session, (page_title, s), i)
+         for i, s in enumerate(sects_to_query)])
 
     seen_titles = []
     article_fetchers = []
@@ -136,7 +141,7 @@ async def wikipedia_handler(request):
         raise web.HTTPBadRequest
 
     data = await wikipedia.query_extract_intro_text_image(
-            request.app['session'], query_text)
+        request.app['session'], query_text)
     if len(data['query']['pages']) < 1:
         return web.json_response({
             'found': False
@@ -163,10 +168,10 @@ app.on_cleanup.append(close)
 
 cors = aiohttp_cors.setup(app, defaults={
     "*": aiohttp_cors.ResourceOptions(
-            allow_credentials=True,
-            expose_headers="*",
-            allow_headers="*",
-        )
+        allow_credentials=True,
+        expose_headers="*",
+        allow_headers="*",
+    )
 })
 
 cors.add(app.router.add_get('/search', search_handler))
