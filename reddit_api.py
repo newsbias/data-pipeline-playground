@@ -8,6 +8,9 @@ from fuzzywuzzy import fuzz
 from lxml import etree
 from pyquery import PyQuery as pq
 import reddit
+from term_frequency import get_most_common_words
+from term_frequency import separate_words
+import itertools
 
 
 async def init(app):
@@ -72,42 +75,49 @@ def query_heuristic(page_title, section):
         return 3
     return 1
 
-
-async def search_handler(request):
+def init_request(request):
     try:
         query = request.query['q']
     except KeyError:
         raise web.HTTPBadRequest
     session = request.app['session']
+    return query, session
 
-    og_query = await wikipedia.query(
-            request.app['session'],
-            list='search',
-            srsearch=query)
+async def get_wikipedia_page(query, session):
+    og_query = await wikipedia.query(session, list='search', srsearch=query)
 
-    if len(og_query['query']['search']) < 1:
+    if not len(og_query['query']['search']):
         raise web.HTTPNotFound  # TODO something else is probably better
 
     # submit query to wikipedia
-    query_resp = await wikipedia.query(
-            session, pageids=og_query['query']['search'][0]['pageid'])
+    page_id = og_query['query']['search'][0]['pageid']
+    query_resp = await wikipedia.query(session, pageids=page_id)
 
-    if len(query_resp['query']['pages']) < 1:
+    pages_returned = query_resp['query']['pages']
+    if len(pages_returned) < 1:
         raise web.HTTPNotFound  # TODO something else is probably better
 
     # TODO heuristic on page names?
-    page = query_resp['query']['pages'][0]
+    page = pages_returned[0]
     if 'pageid' not in page:
         raise web.HTTPNotFound  # TODO something else is probably better
 
+    return page
+
+
+async def search_handler(request):
+
+    query, session = init_request(request)
+
+    page = get_wikipedia_page(query, session)
+
     sections_resp = await wikipedia.parse_sections(session, page)
+
     page_title = sections_resp['parse']['title']
 
-    # query reddit
-    subject_articles = await reddit.query(session, page_title,
-                                          limit=100, sort='new')
-    print(subject_articles)
-    # TODO TF on articles
+    subject_articles = await reddit.query(session, page_title, limit=100, sort='new')
+
+    most_common_words = get_most_common_words(subject_articles)
 
     NUM_QUERIES = 10
     outlinks_by_sect_futures = []
@@ -125,6 +135,9 @@ async def search_handler(request):
                                for link in links['parse']['links']
                                if ':' not in link['title']]
 
+    for i, outlinks in enumerate(outlinks_by_sect):
+        outlinks = list(itertools.chain.from_iterable([separate_words(outlink) for outlink in outlinks]))
+        outlinks_by_sect[i] = set(outlinks).intersection(most_common_words)
     # combine outlinks and sections into flat list
     # TODO: dictionary = {"name of section": [outlinks]}
     sects_to_query = ['Uncategorized']
