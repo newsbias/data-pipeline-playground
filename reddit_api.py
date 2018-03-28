@@ -80,12 +80,14 @@ async def search_handler(request):
             request.app['session'],
             list='search',
             srsearch=query)
+
     if len(og_query['query']['search']) < 1:
         raise web.HTTPNotFound  # TODO something else is probably better
 
     # submit query to wikipedia
     query_resp = await wikipedia.query(
             session, pageids=og_query['query']['search'][0]['pageid'])
+
     if len(query_resp['query']['pages']) < 1:
         raise web.HTTPNotFound  # TODO something else is probably better
 
@@ -93,18 +95,23 @@ async def search_handler(request):
     page = query_resp['query']['pages'][0]
     if 'pageid' not in page:
         raise web.HTTPNotFound  # TODO something else is probably better
+
     sections_resp = await wikipedia.parse_sections(session, page)
     page_title = sections_resp['parse']['title']
 
-    NUM_QUERIES = 10
-    outlinks_by_sect_futures = []
+
 
     async def parse_links_in_section(session, page, sect, i):
         return (i, await wikipedia.parse_links_in_section(session, page, sect))
+
+    # get the outlinks
+    NUM_QUERIES = 10
+    outlinks_by_sect_futures = []
     for i, sect in enumerate(sections_resp['parse']['sections']):
         outlinks_by_sect_futures.append(
                 parse_links_in_section(session, page, sect, i))
 
+    # construct outlinks by section
     outlinks_by_sect = [None] * len(sections_resp['parse']['sections'])
     for fut in asyncio.as_completed(outlinks_by_sect_futures):
         i, links = await fut
@@ -112,6 +119,8 @@ async def search_handler(request):
                                for link in links['parse']['links']
                                if ':' not in link['title']]
 
+    # combine outlinks and sections into flat list
+    # TODO: dictionary = {"name of section": [outlinks]}
     sects_to_query = ['Uncategorized']
     for (sect, outlinks) in zip(
             sections_resp['parse']['sections'], outlinks_by_sect):
@@ -119,20 +128,13 @@ async def search_handler(request):
         for outlink in outlinks:
             sects_to_query.append(outlink)
 
+    # sort sections by the heuristic function
     sects_to_query = sorted(
             sects_to_query,
             key=lambda x: query_heuristic(page_title, x),
             reverse=True)[:NUM_QUERIES]
 
-    print(sects_to_query)
-
-    clusters = []
-    for line in sects_to_query:
-        clusters.append({
-            'keywords': line,
-            'articles': []
-        })
-
+    # query reddit with the page title and section
     reddit_res_by_section = asyncio.as_completed(
         [reddit_query(session, (page_title, s), i)
          for i, s in enumerate(sects_to_query)])
@@ -151,6 +153,14 @@ async def search_handler(request):
             if not found_similar:
                 seen_titles.append(title)
                 article_fetchers.append(fetch_content(session, ra, i))
+
+    # create the clusters
+    clusters = []
+    for line in sects_to_query:
+        clusters.append({
+            'keywords': line,
+            'articles': []
+        })
 
     article_fetcher_results = asyncio.as_completed(article_fetchers)
     j = 0
