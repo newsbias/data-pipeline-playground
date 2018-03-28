@@ -3,8 +3,7 @@ URL = "https://api.reddit.com/search"
 DEFAULT_QUERYPARAMS = {
     'limit': 10,
     'sort': 'relevance',
-    'restrict_sr': 'true',
-    't': 'month',
+    't': 'year',
     'type': 'link'
 }
 

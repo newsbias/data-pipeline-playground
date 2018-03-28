@@ -35,7 +35,7 @@ async def build_html_tree(resp):
 
 async def fetch_content(session, article, id):
     async with session.get(article['url']) as resp:
-        if resp.status == 404:
+        if resp.status // 100 == 4:
             return (id, None)
         resp.raise_for_status()
         tree = await build_html_tree(resp)
