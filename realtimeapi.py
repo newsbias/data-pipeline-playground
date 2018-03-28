@@ -5,7 +5,6 @@ import sys
 import datetime
 from aiohttp import web
 import aiohttp_cors
-import text_extract
 import news_parsers
 import wikipedia
 from fuzzywuzzy import fuzz
@@ -39,7 +38,7 @@ async def newsapi_query(session, api_key, q, id):
         'to': today.isoformat(),
         'q': q,
         'pageSize': 5,
-        'sources': ','.join(news_parsers.PARSERS.keys())
+        'sources': ','.join(news_parsers.NEWSAPI_PARSERS.keys())
     }
     async with session.get(URL, params=query_pairs) as resp:
         resp.raise_for_status()
@@ -47,6 +46,7 @@ async def newsapi_query(session, api_key, q, id):
         if data['status'] != 'ok':
             raise NewsApiError
         return (id, data['articles'])
+
 
 
 
@@ -72,9 +72,9 @@ async def fetch_content(session, article, id):
         except:
             return None
         tree = await build_html_tree(resp)
-        if article['source']['id'] not in news_parsers.PARSERS:
+        if article['source']['id'] not in news_parsers.NEWSAPI_PARSERS:
             return None
-        parser = news_parsers.PARSERS[article['source']['id']]
+        parser = news_parsers.NEWSAPI_PARSERS[article['source']['id']]
         processed = parser(tree)
         if processed is None:
             return (id, None)
@@ -168,7 +168,6 @@ async def search_handler(request):
             j += 1
 
     return web.json_response([c for c in clusters if len(c['articles']) > 0])
-
 
 async def wikipedia_handler(request):
     try:
