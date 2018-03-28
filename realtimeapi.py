@@ -4,7 +4,6 @@ import os
 import sys
 import datetime
 from aiohttp import web
-import aiohttp_cors
 import news_parsers
 import wikipedia
 from fuzzywuzzy import fuzz
@@ -46,8 +45,6 @@ async def newsapi_query(session, api_key, q, id):
         if data['status'] != 'ok':
             raise NewsApiError
         return (id, data['articles'])
-
-
 
 
 async def build_html_tree(resp):
@@ -171,6 +168,7 @@ async def search_handler(request):
 
     return web.json_response([c for c in clusters if len(c['articles']) > 0])
 
+
 async def wikipedia_handler(request):
     try:
         query_text = request.query['q']
@@ -199,7 +197,14 @@ async def wikipedia_handler(request):
     })
 
 
-app = web.Application()
+@web.middleware
+async def cors(request, handler):
+    response = await handler(request)
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
+app = web.Application(middlewares=[cors])
 apikey = os.environ.get('NB_NEWSAPI_API_KEY', None)
 if apikey is None:
     print('API key not specified', file=sys.stderr)
@@ -209,15 +214,7 @@ app['apikey'] = apikey
 app.on_startup.append(init)
 app.on_cleanup.append(close)
 
-cors = aiohttp_cors.setup(app, defaults={
-    "*": aiohttp_cors.ResourceOptions(
-            allow_credentials=True,
-            expose_headers="*",
-            allow_headers="*",
-        )
-})
-
-cors.add(app.router.add_get('/search', search_handler))
-cors.add(app.router.add_get('/wikipedia', wikipedia_handler))
+app.router.add_get('/search', search_handler)
+app.router.add_get('/wikipedia', wikipedia_handler)
 
 web.run_app(app, port=int(os.environ.get('PORT', '8080')))
