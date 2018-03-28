@@ -137,8 +137,17 @@ async def wikipedia_handler(request):
     except KeyError:
         raise web.HTTPBadRequest
 
+    og_query = await wikipedia.query(
+            request.app['session'],
+            list='search',
+            srsearch=query_text)
+    if len(og_query['query']['search']) < 1:
+        return web.json_response({
+            'found': False
+        })
+
     data = await wikipedia.query_extract_intro_text_image(
-        request.app['session'], query_text)
+        request.app['session'], og_query['query']['search'][0]['pageid'])
     if len(data['query']['pages']) < 1:
         return web.json_response({
             'found': False

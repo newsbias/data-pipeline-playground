@@ -20,7 +20,7 @@ async def query(session, **params):
     return await _get_json(session, URL, params)
 
 
-async def query_extract_intro_text_image(session, q, num_sentences=3):
+async def query_extract_intro_text_image(session, page_id, num_sentences=3):
     return await query(session,
                        prop='extracts|pageimages',
                        redirects='true',
@@ -29,7 +29,7 @@ async def query_extract_intro_text_image(session, q, num_sentences=3):
                        exintro='true',
                        exsentences=num_sentences,
                        explaintext='true',
-                       titles=q)
+                       pageids=page_id)
 
 
 async def parse(session, page, **params):
