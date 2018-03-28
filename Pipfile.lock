@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "3168eefcf8d4a698fc5d9a26c40bd2e2696efd3e8dd8790fedd107fbf18ef13b"
+            "sha256": "779596e65a4f901f474c16212335c075be8fc96e4d3824892fbf4d4029a2c3e2"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -55,13 +55,6 @@
                 "sha256:dc5cab081d4b334d0440b019edf24fe1cb138b8114e0e22d2b0661284bc1775f"
             ],
             "version": "==3.1.1"
-        },
-        "aiohttp-cors": {
-            "hashes": [
-                "sha256:0451ba59fdf6909d0e2cd21e4c0a43752bc0703d33fc78ae94d9d9321710193e",
-                "sha256:4d39c6d7100fd9764ed1caf8cebf0eb01bf5e3f24e2e073fda6234bc48b19f5d"
-            ],
-            "version": "==0.7.0"
         },
         "async-timeout": {
             "hashes": [
