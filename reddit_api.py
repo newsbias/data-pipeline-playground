@@ -7,7 +7,7 @@ import wikipedia
 from fuzzywuzzy import fuzz
 from lxml import etree
 from pyquery import PyQuery as pq
-from reddit import reddit_query
+import reddit
 
 
 async def init(app):
@@ -33,23 +33,27 @@ async def build_html_tree(resp):
         return None
 
 
-async def fetch_content(session, article, id):
+async def attach_id(id, fut):
+    return (id, await fut)
+
+
+async def fetch_content(session, article):
     async with session.get(article['url']) as resp:
         if resp.status // 100 == 4:
-            return (id, None)
+            return None
         resp.raise_for_status()
         tree = await build_html_tree(resp)
         if article['source'] not in news_parsers.REDDIT_PARSERS:
-            return (id, None)
+            return None
         parser = news_parsers.REDDIT_PARSERS[article['source']]
         processed = parser(tree)
         if processed is None:
-            return (id, None)
-        return (id, {
+            return None
+        return {
             'text': processed,
             'title': article['title'],
             'url': article['url']
-        })
+        }
 
 
 def query_heuristic(page_title, section):
@@ -99,17 +103,19 @@ async def search_handler(request):
     sections_resp = await wikipedia.parse_sections(session, page)
     page_title = sections_resp['parse']['title']
 
+    # query reddit
+    subject_articles = await reddit.query(session, page_title,
+                                          limit=100, sort='new')
+    print(subject_articles)
+    # TODO TF on articles
 
-
-    async def parse_links_in_section(session, page, sect, i):
-        return (i, await wikipedia.parse_links_in_section(session, page, sect))
-
-    # get the outlinks
     NUM_QUERIES = 10
     outlinks_by_sect_futures = []
+
     for i, sect in enumerate(sections_resp['parse']['sections']):
         outlinks_by_sect_futures.append(
-                parse_links_in_section(session, page, sect, i))
+                attach_id(
+                    i, wikipedia.parse_links_in_section(session, page, sect)))
 
     # construct outlinks by section
     outlinks_by_sect = [None] * len(sections_resp['parse']['sections'])
@@ -136,7 +142,7 @@ async def search_handler(request):
 
     # query reddit with the page title and section
     reddit_res_by_section = asyncio.as_completed(
-        [reddit_query(session, (page_title, s), i)
+        [attach_id(i, reddit.query(session, (page_title, s)))
          for i, s in enumerate(sects_to_query)])
 
     seen_titles = []
@@ -152,7 +158,8 @@ async def search_handler(request):
                     break
             if not found_similar:
                 seen_titles.append(title)
-                article_fetchers.append(fetch_content(session, ra, i))
+                article_fetchers.append(
+                        attach_id(i, fetch_content(session, ra)))
 
     # create the clusters
     clusters = []
@@ -168,8 +175,6 @@ async def search_handler(request):
         i, art = await fut
         if art is not None:
             art['_id'] = j
-            print('"{}" belongs with "{}"'.format(
-                art['title'], clusters[i]['keywords']))
             clusters[i]['articles'].append(art)
             j += 1
 

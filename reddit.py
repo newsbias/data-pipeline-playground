@@ -26,17 +26,22 @@ NEWS_SITES = [
 QUERY_DEFAULT = "(site:" + " OR site:".join(NEWS_SITES) + ')'
 
 
-async def reddit_query(session, query, i):
-    subject, topic = query
+async def query(session, query, **kwargs):
+    if isinstance(query, str):
+        subject = query
+        topic = None
+    else:
+        subject, topic = query
     # XXX dear god this is awful
     queries = [QUERY_DEFAULT, subject]
-    if topic != 'Uncategorized':
+    if topic is not None and topic != 'Uncategorized':
         queries.append(topic)
     q = " AND ".join(queries)
+    params = DEFAULT_QUERYPARAMS.copy()
     params = {
         'q': q
     }
-    params.update(DEFAULT_QUERYPARAMS)
+    params.update(kwargs)
 
     async with session.get(URL, params=params) as resp:
         resp.raise_for_status()
@@ -57,4 +62,4 @@ async def reddit_query(session, query, i):
             'source': source
         })
 
-    return (i, output)
+    return output
