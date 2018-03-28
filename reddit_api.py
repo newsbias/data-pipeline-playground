@@ -99,7 +99,7 @@ async def search_handler(request):
         })
 
     reddit_res_by_section = asyncio.as_completed(
-            [(i, reddit_query(session, (page_title, s)))
+            [reddit_query(session, (page_title, s), i)
              for i, s in enumerate(sects_to_query)])
 
     seen_titles = []
