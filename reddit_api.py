@@ -99,6 +99,7 @@ async def search_handler(request):
             key=lambda x: query_heuristic(page_title, x),
             reverse=True)[:NUM_QUERIES]]
 
+    sects_to_query.insert(0, 'Uncategorized')
     print(sects_to_query)
 
     clusters = []
@@ -133,6 +134,8 @@ async def search_handler(request):
         i, art = await fut
         if art is not None:
             art['_id'] = j
+            print('"{}" belongs with "{}"'.format(
+                art['title'], clusters[i]['keywords']))
             clusters[i]['articles'].append(art)
             j += 1
 

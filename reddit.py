@@ -28,7 +28,10 @@ QUERY_DEFAULT = "(site:" + " OR site:".join(NEWS_SITES) + ')'
 
 async def reddit_query(session, query, i):
     subject, topic = query
-    queries = [QUERY_DEFAULT, subject, topic]
+    # XXX dear god this is awful
+    queries = [QUERY_DEFAULT, subject]
+    if topic != 'Uncategorized':
+        queries.append(topic)
     q = " AND ".join(queries)
     params = {
         'q': q
