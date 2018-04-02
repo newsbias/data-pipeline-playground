@@ -6,13 +6,14 @@ from nltk.tag import pos_tag
 
 stop = stopwords.words('english')
 
+
 def get_most_common_words(articles):
-    return set(np.array(Counter([\
-    re.sub('[^A-Za-z0-9_ ]', '', word) \
-        for article in articles \
-            for word in separate_words(article['title']) \
-                if word not in stop and len(word) > 1\
-    ]).most_common(100))[:,0])
+    return set(np.array(Counter(
+            re.sub('[^A-Za-z0-9_ ]', '', word)
+            for article in articles
+            for word in separate_words(article)
+            if word not in stop and len(word) > 1
+    ).most_common(100))[:, 0])
 
 
 def separate_words(sent):

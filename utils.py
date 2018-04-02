@@ -1,7 +1,11 @@
-def get_combinations(elt, k, output):
+async def attach_id(id, fut):
+    return (id, await fut)
+
+
+def get_combinations(words, k, output):
+    len_to_list_map = {}
 
     # Split input into a list of words
-    words = elt.split()
     n = len(words)
 
     if not k:

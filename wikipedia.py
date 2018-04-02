@@ -1,3 +1,8 @@
+import asyncio
+from aiohttp import web
+from utils import attach_id
+
+
 DEFAULT_QUERYPARAMS = {
     'formatversion': 2,
     'format': 'json'
@@ -6,21 +11,30 @@ DEFAULT_QUERYPARAMS = {
 
 URL = 'https://en.wikipedia.org/w/api.php'
 
+
 class WikiPage:
+    # XXX you can't actually make __init__ a coroutine,
+    # so we have this hack instead
+    @classmethod
+    async def fetch(cls, session, query):
+        obj = cls()
+        obj.page = await get_first_result(session, query)
+        obj.title = obj.page['title']
+        resp = await parse_sections(session, obj.page)
+        obj.sections = resp['parse']['sections']
+        obj.outlinks_by_section = await obj.get_outlinks_by_section(session)
+        return obj
 
-    def __init__(self, session, query):
-        self.wiki_page = self.get_first_result(session, query)
-        self.outlinks_by_section = self.get_outlinks_by_section(session)
+    async def get_outlinks_by_section(self, session):
+        outlinks_by_section_fut = asyncio.as_completed(
+            [attach_id(section['line'], get_outlinks(
+                session, self.page, section))
+             for section in self.sections])
 
-
-    def get_outlinks_by_section(self, session):
-        response = await parse(session, page, prop='sections')
-
-        sections = response['parse']['sections']
-
-        # TODO: do we need to call wikipedia again?
-        # TODO: Let Nathan turn this into with async
-        outlinks_by_section = {section['line']: get_outlinks(section) for section in sections}
+        outlinks_by_section = {}
+        for fut in outlinks_by_section_fut:
+            line, outlinks = await fut
+            outlinks_by_section[line] = outlinks
 
         return outlinks_by_section
 
@@ -51,27 +65,23 @@ async def query_extract_intro_text_image(session, page_id, num_sentences=3):
 
 
 async def get_first_result(session, srsearch):
+    response = await query(session, list='search', srsearch=srsearch)
+    pages = response['query']['search']
 
-        response = await query(session, list='search', srsearch=srsearch)
-        pages = response['query']['search']
+    if len(pages) == 0 or 'pageid' not in pages[0]:
+        raise web.HTTPNotFound  # Signal no return value
+    return pages[0]
 
 
-        if not len(pages) or 'pageid' not in pages[0]:
-            raise web.HTTPNotFound  # TODO something else is probably better
+async def get_outlinks(session, page, section):
+    # TODO: any other filtering goes here.
+    # e.g. maybe we want to divide up the words into BOW dict by length here
+    resp = await parse_links_in_section(
+        session, page, section)
+    outlinks = resp['parse']['links']
 
-        # submit query to wikipedia
-        first_page = pages[0]
-        first_page_page_id = first_page['pageid']
-        
-        return await query(session, pageids=first_page_page_id)
+    return [link['title'] for link in outlinks if ':' not in link['title']]
 
-# TODO: any other filtering goes here.
-# e.g. maybe we want to divide up the words into BOW dict by length here
-async def get_outlinks(session, section):
-
-    outlinks = parse_links_in_section(session, page, section)['parse']['links']
-
-    return [link['title'] for outlink in outlinks['parse']['links'] if ':' not in link['title']]
 
 async def _parse_nopage(session, **params):
     params['action'] = 'parse'
@@ -81,13 +91,11 @@ async def _parse_nopage(session, **params):
 async def parse(session, page, **params):
     return await _parse_nopage(session, pageid=page['pageid'], **params)
 
+
 async def parse_sections(session, page):
     return await parse(session, page, prop='sections')
 
-# TODO: comment or reference the wiki api so that we understand why there's one call per section
+
 async def parse_links_in_section(session, page, section):
-    section_content = await parse(session, page, section=section['index'], prop='wikitext')['parse']['wikitext']
-    section_content = section_content.replace('{{reflist}}', '')
-    links = await _parse_nopage(session, text=section_content, prop='links')
-    # TODO filter junk links?
+    links = await parse(session, page, section=section['index'])
     return links

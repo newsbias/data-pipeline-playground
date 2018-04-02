@@ -1,3 +1,6 @@
+import collections
+
+
 URL = "https://api.reddit.com/search"
 
 DEFAULT_QUERYPARAMS = {
@@ -26,7 +29,6 @@ NEWS_SITES = [
 QUERY_DEFAULT = "(site:" + " OR site:".join(NEWS_SITES) + ')'
 
 
-# TODO: move **kwargs here. That's reddit's responsibility?
 async def query(session, query, **kwargs):
     if isinstance(query, str):
         subject = query
@@ -35,7 +37,10 @@ async def query(session, query, **kwargs):
         subject, topic = query
     # XXX dear god this is awful
     queries = [QUERY_DEFAULT, subject]
-    if topic is not None and topic != 'Uncategorized':
+    if isinstance(topic, collections.Iterable):
+        topic_query = ' OR '.join(topic)
+        queries.append(topic_query)
+    elif isinstance(topic, str):
         queries.append(topic)
     q = " AND ".join(queries)
     params = DEFAULT_QUERYPARAMS.copy()

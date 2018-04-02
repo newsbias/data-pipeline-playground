@@ -10,8 +10,8 @@ from lxml import etree
 from pyquery import PyQuery as pq
 import reddit
 from term_frequency import get_most_common_words
-from term_frequency import separate_words
-import itertools
+import outlink_articles_intersection
+from utils import attach_id
 
 
 async def init(app):
@@ -35,10 +35,6 @@ async def build_html_tree(resp):
     except etree.XMLSyntaxError as e:
         print('syntax error: {}'.format(str(e)))
         return None
-
-
-async def attach_id(id, fut):
-    return (id, await fut)
 
 
 async def fetch_content(session, article):
@@ -76,7 +72,8 @@ def query_heuristic(page_title, section):
         return 3
     return 1
 
-def init_request(request):
+
+def parse_request(request):
     try:
         query = request.query['q']
     except KeyError:
@@ -84,13 +81,17 @@ def init_request(request):
     session = request.app['session']
     return query, session
 
-# returns clusters for the query. calls intersection function. uses commented code below to create the clusters.
-def do_something_with_reddit_and_wikipedia(keywords, page):
-    pass
-'''
-    # query reddit with the page title and section
+
+# returns clusters for the query. calls intersection function.
+# uses commented code below to create the clusters.
+async def get_clustered_articles(session, keywords, page):
+    import pdb
+    pdb.set_trace()
+    keywords_by_cluster = outlink_articles_intersection.intersection(
+        page.outlinks_by_section.values(), keywords)
+    # query reddit with the page title and keywords
     reddit_res_by_section = asyncio.as_completed(
-        [attach_id(i, reddit.query(session, (page.get_title(), keywords)))
+        [attach_id(i, reddit.query(session, (page.title, keywords)))
          for i, keywords in enumerate(keywords_by_cluster)])
 
     seen_titles = []
@@ -111,9 +112,9 @@ def do_something_with_reddit_and_wikipedia(keywords, page):
 
     # create the clusters
     clusters = []
-    for line in sects_to_query:
+    for i, (_, line) in enumerate(zip(keywords_by_cluster, page.sections)):
         clusters.append({
-            'keywords': line,
+            'keywords': page.sections['line'],
             'articles': []
         })
 
@@ -125,36 +126,31 @@ def do_something_with_reddit_and_wikipedia(keywords, page):
             art['_id'] = j
             clusters[i]['articles'].append(art)
             j += 1
-'''
+
+    return clusters
 
 
 async def search_handler(request):
+    query, session = parse_request(request)
 
-    query, session = init_request(request)
+    page = await WikiPage.fetch(session, query)
 
-    page = WikiPage(query, session)
-
-    reddit_articles = await reddit.query(session, page.get_title(), limit=100, sort='new')
-    
+    reddit_articles = await reddit.query(session, page.title,
+                                         limit=100, sort='new')
     vocabulary = [article['title'] for article in reddit_articles]
-
     most_common_words = get_most_common_words(vocabulary)
 
-    clusters = do_something_with_reddit_and_wikipedia(most_common_words, page)
-
+    clusters = await get_clustered_articles(session, most_common_words, page)
     return web.json_response([c for c in clusters if len(c['articles']) > 0])
 
 
 async def wikipedia_handler(request):
-    try:
-        query_text = request.query['q']
-    except KeyError:
-        raise web.HTTPBadRequest
+    query, session = parse_request(request)
 
     og_query = await wikipedia.query(
-            request.app['session'],
+            session,
             list='search',
-            srsearch=query_text)
+            srsearch=query)
     if len(og_query['query']['search']) < 1:
         return web.json_response({
             'found': False
