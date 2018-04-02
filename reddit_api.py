@@ -85,8 +85,6 @@ def parse_request(request):
 # returns clusters for the query. calls intersection function.
 # uses commented code below to create the clusters.
 async def get_clustered_articles(session, keywords, page):
-    import pdb
-    pdb.set_trace()
     keywords_by_cluster = outlink_articles_intersection.intersection(
         page.outlinks_by_section.values(), keywords)
     # query reddit with the page title and keywords
@@ -112,9 +110,9 @@ async def get_clustered_articles(session, keywords, page):
 
     # create the clusters
     clusters = []
-    for i, (_, line) in enumerate(zip(keywords_by_cluster, page.sections)):
+    for i, (_, sect) in enumerate(zip(keywords_by_cluster, page.sections)):
         clusters.append({
-            'keywords': page.sections['line'],
+            'keywords': sect['line'],
             'articles': []
         })
 

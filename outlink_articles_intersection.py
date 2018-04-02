@@ -11,7 +11,7 @@ def parse(list_of_words, k=None):
         for group in elt:
             output = get_combinations(elt, k, output)
 
-        return output
+    return output
 
 
 # outlinks by section -> list of lists, where the inner-list is the outlinks.
@@ -23,6 +23,8 @@ def intersection(outlinks_by_sect, keywords):
 
     for outlinks, section in zip(outlinks_by_sect, sections):
         # TODO bug!
+        if len(section.keys()) == 0:
+            continue
         k = max(section.keys())
 
         keywords_dic = parse(keywords, k)
