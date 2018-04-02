@@ -26,6 +26,7 @@ NEWS_SITES = [
 QUERY_DEFAULT = "(site:" + " OR site:".join(NEWS_SITES) + ')'
 
 
+# TODO: move **kwargs here. That's reddit's responsibility?
 async def query(session, query, **kwargs):
     if isinstance(query, str):
         subject = query

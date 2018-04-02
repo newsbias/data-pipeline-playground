@@ -25,6 +25,7 @@ gensim = "*"
 [dev-packages]
 
 "autopep8" = "*"
+pylint = "*"
 
 
 [requires]

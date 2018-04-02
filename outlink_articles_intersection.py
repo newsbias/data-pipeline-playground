@@ -1,29 +1,30 @@
 import itertools
 from term_frequency import separate_words
+from utils import get_combinations
 
-def get_combinations(elt, k):
-	words = elt.split()
-	if not k:
-		k = len(words)
-	# do work
+def parse(list_of_words, k = None):
+	output = {}
 
-def parse(list_of_lists, k = None):
-	output = []
-	for list in list_of_lists:
-		for elt in list:
-			elt = separate_words(elt)
-			for group in elt:
-				output.append(get_combinations(elt, k))
+	for elt in list_of_words:
+		elt = separate_words(elt)
+		for group in elt:
+			output = get_combinations(elt, k, output)
 
 	return output
 
-def get_outlinks(outlinks):
+# outlinks by section -> list of lists, where the inner-list is the outlinks. outer list is the index corresponding to the index of the section
+# articles -> comes from get_most_common_words. just a list.
+def intersection(outlinks_by_sect, keywords):
+    section_keywords = []
+	sections = [parse(outlinks) for outlinks in outlinks_by_sect]
 
+    for section in sections:
+        k = max(section.keys())
 
-def intersection(outlinks, articles):
-	outlinks_dic = parse(outlinks)
-	k = max(outlinks_dic.keys())
+	    keywords_dic = parse(keywords, k)
 
-	articles_dic = parse(articles, k)
+	    section_keywords.append(list(itertools.chain.from_iterable([k.instersection(o) \
+            for _, o in outlinks_dic.items() \
+            for _, k in keywords_dic.items()])))
 
-	list(itertools.chain.from_iterable([a.instersection(o) for _, o in outlinks_dic.items() for _, a in articles_dic.items()]))
+    return section_keywords

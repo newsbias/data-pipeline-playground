@@ -4,6 +4,7 @@ import os
 from aiohttp import web
 import news_parsers
 import wikipedia
+from wikipedia import WikiPage
 from fuzzywuzzy import fuzz
 from lxml import etree
 from pyquery import PyQuery as pq
@@ -83,80 +84,14 @@ def init_request(request):
     session = request.app['session']
     return query, session
 
-async def get_wikipedia_page(query, session):
-    og_query = await wikipedia.query(session, list='search', srsearch=query)
-
-    if not len(og_query['query']['search']):
-        raise web.HTTPNotFound  # TODO something else is probably better
-
-    # submit query to wikipedia
-    page_id = og_query['query']['search'][0]['pageid']
-    query_resp = await wikipedia.query(session, pageids=page_id)
-
-    pages_returned = query_resp['query']['pages']
-    if len(pages_returned) < 1:
-        raise web.HTTPNotFound  # TODO something else is probably better
-
-    # TODO heuristic on page names?
-    page = pages_returned[0]
-    if 'pageid' not in page:
-        raise web.HTTPNotFound  # TODO something else is probably better
-
-    return page
-
-
-async def search_handler(request):
-
-    query, session = init_request(request)
-
-    page = get_wikipedia_page(query, session)
-
-    sections_resp = await wikipedia.parse_sections(session, page)
-
-    page_title = sections_resp['parse']['title']
-
-    subject_articles = await reddit.query(session, page_title, limit=100, sort='new')
-
-    most_common_words = get_most_common_words(subject_articles)
-
-    NUM_QUERIES = 10
-    outlinks_by_sect_futures = []
-
-    for i, sect in enumerate(sections_resp['parse']['sections']):
-        outlinks_by_sect_futures.append(
-                attach_id(
-                    i, wikipedia.parse_links_in_section(session, page, sect)))
-
-    # construct outlinks by section
-    outlinks_by_sect = [None] * len(sections_resp['parse']['sections'])
-    for fut in asyncio.as_completed(outlinks_by_sect_futures):
-        i, links = await fut
-        outlinks_by_sect[i] = [link['title']
-                               for link in links['parse']['links']
-                               if ':' not in link['title']]
-
-    for i, outlinks in enumerate(outlinks_by_sect):
-        outlinks = list(itertools.chain.from_iterable([separate_words(outlink) for outlink in outlinks]))
-        outlinks_by_sect[i] = set(outlinks).intersection(most_common_words)
-    # combine outlinks and sections into flat list
-    # TODO: dictionary = {"name of section": [outlinks]}
-    sects_to_query = ['Uncategorized']
-    for (sect, outlinks) in zip(
-            sections_resp['parse']['sections'], outlinks_by_sect):
-        sects_to_query.append(sect['line'])
-        for outlink in outlinks:
-            sects_to_query.append(outlink)
-
-    # sort sections by the heuristic function
-    sects_to_query = sorted(
-            sects_to_query,
-            key=lambda x: query_heuristic(page_title, x),
-            reverse=True)[:NUM_QUERIES]
-
+# returns clusters for the query. calls intersection function. uses commented code below to create the clusters.
+def do_something_with_reddit_and_wikipedia(keywords, page):
+    pass
+'''
     # query reddit with the page title and section
     reddit_res_by_section = asyncio.as_completed(
-        [attach_id(i, reddit.query(session, (page_title, s)))
-         for i, s in enumerate(sects_to_query)])
+        [attach_id(i, reddit.query(session, (page.get_title(), keywords)))
+         for i, keywords in enumerate(keywords_by_cluster)])
 
     seen_titles = []
     article_fetchers = []
@@ -190,6 +125,22 @@ async def search_handler(request):
             art['_id'] = j
             clusters[i]['articles'].append(art)
             j += 1
+'''
+
+
+async def search_handler(request):
+
+    query, session = init_request(request)
+
+    page = WikiPage(query, session)
+
+    reddit_articles = await reddit.query(session, page.get_title(), limit=100, sort='new')
+    
+    vocabulary = [article['title'] for article in reddit_articles]
+
+    most_common_words = get_most_common_words(vocabulary)
+
+    clusters = do_something_with_reddit_and_wikipedia(most_common_words, page)
 
     return web.json_response([c for c in clusters if len(c['articles']) > 0])
 
