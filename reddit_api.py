@@ -1,23 +1,30 @@
-import aiohttp
 import asyncio
 import os
+
+import aiohttp
 from aiohttp import web
+from pyquery import PyQuery as pq
+from fuzzywuzzy import fuzz
+from lxml import etree
+
 import news_parsers
 import wikipedia
 from wikipedia import WikiPage
-from fuzzywuzzy import fuzz
-from lxml import etree
-from pyquery import PyQuery as pq
 import reddit
-from term_frequency import get_most_common_words
-import outlink_articles_intersection
-from utils import attach_id
+from utils import filter_keywords_by_section
+from utils import get_keywords
 
-
+'''
+@param app aiohttp:web application
+Creates a Client Session
+'''
 async def init(app):
     app['session'] = aiohttp.ClientSession()
 
-
+'''
+@param app aiohttp:web application
+Closes a Client Session
+'''
 async def close(app):
     await app['session'].close()
 
@@ -38,22 +45,19 @@ async def build_html_tree(resp):
 
 
 async def fetch_content(session, article):
-    async with session.get(article['url']) as resp:
+    async with session.get(article.url) as resp:
         if resp.status // 100 == 4:
             return None
         resp.raise_for_status()
         tree = await build_html_tree(resp)
-        if article['source'] not in news_parsers.REDDIT_PARSERS:
+        if article.source not in news_parsers.REDDIT_PARSERS:
             return None
-        parser = news_parsers.REDDIT_PARSERS[article['source']]
+        parser = news_parsers.REDDIT_PARSERS[article.source]
         processed = parser(tree)
         if processed is None:
             return None
-        return {
-            'text': processed,
-            'title': article['title'],
-            'url': article['url']
-        }
+
+        article.text = processed
 
 
 def query_heuristic(page_title, section):
@@ -81,49 +85,53 @@ def parse_request(request):
     session = request.app['session']
     return query, session
 
+class Article:
+    def __init__(self, id, title, url, source):
+        self.id = id
+        self.title = title
+        self.url = url
+        self.source = source
+
+class Cluster:
+    async def __init__(self, section_id, id, articles, title, topic, keyword):
+        self.articles = self.filter(articles)
+        self.num_articles = len(articles)
+
+        self.section_id = section_id
+        self.id = id
+        self.topic = topic
+        self.keyword = keyword
+    
+    def filter(self, articles):
+        # Liechenstein similarity constant. Range from 0-100, where 0 is not similar and 100 is exact match.
+        SIMILARITY = 80
+        unique_articles = []
+        for article in articles:
+            found_similar = False
+            for unique_article in unique_articles:
+                if fuzz.ratio(unique_article.title, article.title) > SIMILARITY:
+                    found_similar = True
+                    break
+            if not found_similar:
+                unique_articles.append(article)
+
+        return unique_articles
+    
+    def get_json(self):
+        return {"keyword": self.keyword, "topic": self.topic, "articles": self.articles}
 
 # returns clusters for the query. calls intersection function.
 # uses commented code below to create the clusters.
 async def get_clustered_articles(session, keywords, page):
-    keywords_by_cluster = outlink_articles_intersection.intersection(
-        page.outlinks_by_section.values(), keywords)
-    # query reddit with the page title and keywords
-    reddit_res_by_section = asyncio.as_completed(
-        [attach_id(i, reddit.query(session, (page.title, keywords)))
-         for i, keywords in enumerate(keywords_by_cluster)])
+    keywords_by_cluster = filter_keywords_by_section(page.outlinks_by_section.values(), keywords)
 
-    seen_titles = []
-    article_fetchers = []
-    for fut in reddit_res_by_section:
-        i, raw_articles = await fut
-        for ra in raw_articles:
-            title = ra['title']
-            found_similar = False
-            for seen_title in seen_titles:
-                if fuzz.ratio(title, seen_title) > 80:
-                    found_similar = True
-                    break
-            if not found_similar:
-                seen_titles.append(title)
-                article_fetchers.append(
-                        attach_id(i, fetch_content(session, ra)))
-
-    # create the clusters
     clusters = []
-    for i, (_, sect) in enumerate(zip(keywords_by_cluster, page.sections)):
-        clusters.append({
-            'keywords': sect['line'],
-            'articles': []
-        })
-
-    article_fetcher_results = asyncio.as_completed(article_fetchers)
-    j = 0
-    for fut in article_fetcher_results:
-        i, art = await fut
-        if art is not None:
-            art['_id'] = j
-            clusters[i]['articles'].append(art)
-            j += 1
+    for section_id, keywords in enumerate(keywords_by_cluster):
+        topic = page.sections[section_id]
+        for keyword_id, keyword in enumerate(keywords):
+            articles = await reddit.query(session, (page.title, (topic, keyword)))
+            cluster = Cluster(section_id, keyword_id, articles, page.title, topic, keyword)
+            clusters.append(cluster.get_json())
 
     return clusters
 
@@ -133,13 +141,15 @@ async def search_handler(request):
 
     page = await WikiPage.fetch(session, query)
 
-    reddit_articles = await reddit.query(session, page.title,
-                                         limit=100, sort='new')
-    vocabulary = [article['title'] for article in reddit_articles]
-    most_common_words = get_most_common_words(vocabulary)
+    reddit_articles = await reddit.query(session, page.title, limit=100, sort='new')
 
-    clusters = await get_clustered_articles(session, most_common_words, page)
-    return web.json_response([c for c in clusters if len(c['articles']) > 0])
+    vocabulary = [article['title'] for article in reddit_articles]
+
+    keywords = get_keywords(vocabulary)
+
+    clusters = await get_clustered_articles(session, keywords, page)
+
+    return web.json_response(clusters)
 
 
 async def wikipedia_handler(request):
