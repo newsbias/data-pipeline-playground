@@ -128,8 +128,6 @@ async def get_clustered_articles(session, vocabulary, page):
     uses commented code below to create the clusters.
     """
     keywords_by_cluster = filter_keywords_by_section(page.outlinks_by_section, vocabulary)
-    import pdb
-    pdb.set_trace()
 
     clusters = []
     for section in keywords_by_cluster:

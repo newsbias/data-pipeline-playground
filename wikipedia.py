@@ -79,9 +79,6 @@ async def get_outlinks(session, page, section):
     resp = await parse_links_in_section(
         session, page, section)
     outlinks = resp['parse']['links']
-    import pdb
-    pdb.set_trace()
-
     return [link['title'] for link in outlinks if ':' not in link['title']]
 
 
@@ -95,7 +92,25 @@ async def parse(session, page, **params):
 
 
 async def parse_sections(session, page):
-    return await parse(session, page, prop='sections')
+    raw_sects = await parse(session, page, prop='sections')
+    innermost_heading = {}
+    for s in raw_sects['parse']['sections']:
+        sect_num = int(s['number'].split('.', maxsplit=1)[0])
+        sect_level = None
+        if sect_num in innermost_heading:
+            sect_level = innermost_heading[sect_num]['toclevel']
+
+        if sect_level is None or s['toclevel'] < sect_level:
+            innermost_heading[sect_num] = s
+
+    sects = [
+        x for _, x in innermost_heading.items()
+    ]
+    return {
+        'parse': {
+            'sections': sects
+        }
+    }
 
 
 async def parse_links_in_section(session, page, section):
