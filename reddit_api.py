@@ -14,22 +14,25 @@ import reddit
 from utils import filter_keywords_by_section
 from utils import get_keywords
 
-'''
-@param app aiohttp:web application
-Creates a Client Session
-'''
+
 async def init(app):
+    '''
+    @param app aiohttp:web application
+    Creates a Client Session
+    '''
     app['session'] = aiohttp.ClientSession()
 
-'''
-@param app aiohttp:web application
-Closes a Client Session
-'''
+
 async def close(app):
+    '''
+    @param app aiohttp:web application
+    Closes a Client Session
+    '''
     await app['session'].close()
 
 
 async def build_html_tree(resp):
+    """Reads an HTML Page"""
     parser = etree.HTMLParser()
     chunk_size = 4096
     while True:
@@ -45,6 +48,7 @@ async def build_html_tree(resp):
 
 
 async def fetch_content(session, article):
+    """Gets the article text"""
     async with session.get(article.url) as resp:
         if resp.status // 100 == 4:
             return None
@@ -60,24 +64,8 @@ async def fetch_content(session, article):
         article.text = processed
 
 
-def query_heuristic(page_title, section):
-    RESERVED = set((
-        'External links',
-        'References',
-        'Bibliography',
-        'Notes',
-        'See also'
-    ))
-    if section in RESERVED:
-        return 0
-    if section == 'Stormy Daniels':
-        return 2
-    if section == 'Uncategorized':
-        return 3
-    return 1
-
-
 def parse_request(request):
+    """Gets the Query and Session from the request"""
     try:
         query = request.query['q']
     except KeyError:
@@ -85,25 +73,37 @@ def parse_request(request):
     session = request.app['session']
     return query, session
 
-class Article:
-    def __init__(self, id, title, url, source):
-        self.id = id
-        self.title = title
-        self.url = url
-        self.source = source
+async def create_cluster(session, title, topic, keywords):
+    """https://stackoverflow.com/questions/33128325/how-to-set-class-attribute-with-await-in-init"""
+
+    query = []
+    query.append(topic)
+    query += keywords
+
+    cluster = Cluster(title, topic, keywords)
+    await cluster._init(session, title, query)
+    return cluster
 
 class Cluster:
-    async def __init__(self, section_id, id, articles, title, topic, keyword):
-        self.articles = self.filter(articles)
-        self.num_articles = len(articles)
-
-        self.section_id = section_id
-        self.id = id
+    """Defines object to hold a collection of articles about a given topic."""
+    @classmethod
+    def __init__(self, title, topic, keywords):
+        """Initializes a Cluster"""
+        self.title = title
         self.topic = topic
-        self.keyword = keyword
+        self.keywords = keywords
+        self.articles = []
+        self.num_articles = 0
     
+    async def _init(self, session, title, query):
+        """Performs async tasks require upon construction of Cluster"""
+        articles = await reddit.query(session, (title, query))
+        self.articles = self.filter(articles)
+        self.num_articles = len(self.articles)
+    
+    @classmethod
     def filter(self, articles):
-        # Liechenstein similarity constant. Range from 0-100, where 0 is not similar and 100 is exact match.
+        """Liechenstein similarity constant. Range from 0-100, where 0 is not similar and 100 is exact match."""
         SIMILARITY = 80
         unique_articles = []
         for article in articles:
@@ -117,33 +117,37 @@ class Cluster:
 
         return unique_articles
     
+    @classmethod
     def get_json(self):
-        return {"keyword": self.keyword, "topic": self.topic, "articles": self.articles}
+        """Prints the cluster"""
+        return {"keywords": self.keywords, "topic": self.topic, "articles": [article.get_json() for article in self.articles]}
 
-# returns clusters for the query. calls intersection function.
-# uses commented code below to create the clusters.
-async def get_clustered_articles(session, keywords, page):
-    keywords_by_cluster = filter_keywords_by_section(page.outlinks_by_section.values(), keywords)
+async def get_clustered_articles(session, vocabulary, page):
+    """
+    returns clusters for the query. calls intersection function.
+    uses commented code below to create the clusters.
+    """
+    keywords_by_cluster = filter_keywords_by_section(page.outlinks_by_section, vocabulary)
+    import pdb
+    pdb.set_trace()
 
     clusters = []
-    for section_id, keywords in enumerate(keywords_by_cluster):
-        topic = page.sections[section_id]
-        for keyword_id, keyword in enumerate(keywords):
-            articles = await reddit.query(session, (page.title, (topic, keyword)))
-            cluster = Cluster(section_id, keyword_id, articles, page.title, topic, keyword)
-            clusters.append(cluster.get_json())
+    for section in keywords_by_cluster:
+        cluster = await create_cluster(session, page.title, section["topic"], section["keywords"])
+        clusters.append(cluster.get_json())
 
     return clusters
 
 
 async def search_handler(request):
+    """Gets topics related to a query based on the request made"""
     query, session = parse_request(request)
 
     page = await WikiPage.fetch(session, query)
 
     reddit_articles = await reddit.query(session, page.title, limit=100, sort='new')
 
-    vocabulary = [article['title'] for article in reddit_articles]
+    vocabulary = [article.title for article in reddit_articles]
 
     keywords = get_keywords(vocabulary)
 
@@ -153,6 +157,7 @@ async def search_handler(request):
 
 
 async def wikipedia_handler(request):
+    """Gets the main card from wikipedia"""
     query, session = parse_request(request)
 
     og_query = await wikipedia.query(
@@ -192,6 +197,7 @@ async def wikipedia_handler(request):
 
 @web.middleware
 async def cors(request, handler):
+    """Enables CORS on the front-end"""
     response = await handler(request)
     response.headers['Access-Control-Allow-Origin'] = '*'
     return response

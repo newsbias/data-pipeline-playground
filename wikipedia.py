@@ -79,6 +79,8 @@ async def get_outlinks(session, page, section):
     resp = await parse_links_in_section(
         session, page, section)
     outlinks = resp['parse']['links']
+    import pdb
+    pdb.set_trace()
 
     return [link['title'] for link in outlinks if ':' not in link['title']]
 

@@ -28,6 +28,15 @@ NEWS_SITES = [
 
 QUERY_DEFAULT = "(site:" + " OR site:".join(NEWS_SITES) + ')'
 
+class Article:
+    def __init__(self, id, title, url, source):
+        self.id = id
+        self.title = title
+        self.url = url
+        self.source = source
+    def get_json(self):
+        return {'id': self.id, 'title': self.title, 'url': self.url, 'source': self.source}
+
 
 async def query(session, query, **kwargs):
     if isinstance(query, str):
@@ -54,7 +63,7 @@ async def query(session, query, **kwargs):
         obj = await resp.json()
 
     output = []
-    for list_elt in obj['data']['children']:
+    for i, list_elt in enumerate(obj['data']['children']):
         data = list_elt['data']
         title = data['title']
         url = data['url']
@@ -62,10 +71,6 @@ async def query(session, query, **kwargs):
         source_parts = data['domain'].split('.')
         source_parts.pop()  # gets rid of `com`
         source = source_parts[-1]
-        output.append({
-            'title': title,
-            'url': url,
-            'source': source
-        })
+        output.append(Article(i, title, url, source))
 
     return output
