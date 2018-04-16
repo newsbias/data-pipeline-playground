@@ -2,7 +2,6 @@ import asyncio
 from aiohttp import web
 from utils import attach_id
 
-
 DEFAULT_QUERYPARAMS = {
     'formatversion': 2,
     'format': 'json'
@@ -100,12 +99,14 @@ async def parse_sections(session, page):
         if sect_num in innermost_heading:
             sect_level = innermost_heading[sect_num]['toclevel']
 
-        if sect_level is None or s['toclevel'] < sect_level:
-            innermost_heading[sect_num] = s
+        if sect_level is None or s['toclevel'] > sect_level:
+            innermost_heading[sect_num] = [s]
+        elif s['toclevel'] == sect_level:
+            innermost_heading[sect_num].append(s)
 
-    sects = [
-        x for _, x in innermost_heading.items()
-    ]
+    sects = []
+    for _, x in innermost_heading.items():
+        sects.extend(x)
     return {
         'parse': {
             'sections': sects
